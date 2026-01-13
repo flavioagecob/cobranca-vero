@@ -39,12 +39,34 @@ export const useXlsxParser = (): UseXlsxParserReturn => {
         throw new Error('Planilha deve ter pelo menos uma linha de cabeçalho e uma linha de dados');
       }
 
-      // First row is headers
-      const headers = (jsonData[0] as string[]).map((h) => 
-        String(h || '').trim()
-      ).filter(Boolean);
+      // First row is headers - preserve column positions and handle duplicates
+      const rawHeaders = jsonData[0] as unknown[];
+      const seenHeaders = new Map<string, number>();
+      const headers: string[] = [];
+      
+      for (let i = 0; i < rawHeaders.length; i++) {
+        let header = String(rawHeaders[i] || '').trim();
+        
+        // Generate placeholder for empty headers to preserve column alignment
+        if (!header) {
+          header = `__col_${i}`;
+        }
+        
+        // Handle duplicate headers by adding suffix
+        if (seenHeaders.has(header)) {
+          const count = seenHeaders.get(header)! + 1;
+          seenHeaders.set(header, count);
+          header = `${header}__${count}`;
+        } else {
+          seenHeaders.set(header, 1);
+        }
+        
+        headers.push(header);
+      }
 
-      if (headers.length === 0) {
+      // Check if we have any real headers (not just placeholders)
+      const realHeaders = headers.filter(h => !h.startsWith('__col_'));
+      if (realHeaders.length === 0) {
         throw new Error('Nenhum cabeçalho encontrado na primeira linha');
       }
 
