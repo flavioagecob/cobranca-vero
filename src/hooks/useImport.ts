@@ -327,19 +327,23 @@ export const useImport = (): UseImportReturn => {
                 continue;
               }
               
-              // Log detalhado para debug das primeiras linhas
-              if (rowIndex <= 7) {
-                console.log(`[Operadora] Linha ${rowIndex} - FATURA:`, {
-                  numero_fatura_raw: numeroFaturaRaw,
-                  numero_fatura_normalizado: numeroFatura,
-                  mapeamento_numero_fatura: fieldMap['numero_fatura'] || '(não mapeado)',
-                });
-              }
+              // Dados da fatura atual
+              const valorFatura = parseCurrency(getValue('valor_fatura'));
+              const dataVencimento = parseDate(getValue('data_vencimento'));
+              
+              // Log detalhado para TODAS as faturas do mesmo contrato (debug)
+              console.log(`[FATURA] Linha ${rowIndex}:`, {
+                contrato: idContrato,
+                fatura_numero: numeroFatura,
+                valor: valorFatura,
+                vencimento: dataVencimento,
+                mapeamento: fieldMap['numero_fatura'] || '(não mapeado)',
+              });
               
               // Verificar se já existe um registro com esse contrato+fatura
               const { data: existingContract } = await supabase
                 .from('operator_contracts')
-                .select('id')
+                .select('id, valor_fatura, data_vencimento')
                 .eq('id_contrato', idContrato)
                 .eq('numero_fatura', numeroFatura)
                 .maybeSingle();
@@ -353,9 +357,9 @@ export const useImport = (): UseImportReturn => {
                 data_cadastro: parseDate(getValue('data_cadastro')),
                 mes_safra_cadastro: getValue('mes_safra_cadastro'),
                 mes_safra_vencimento: getValue('mes_safra_vencimento'),
-                data_vencimento: parseDate(getValue('data_vencimento')),
+                data_vencimento: dataVencimento,
                 data_pagamento: parseDate(getValue('data_pagamento')),
-                valor_fatura: parseCurrency(getValue('valor_fatura')),
+                valor_fatura: valorFatura,
                 import_batch_id: batchId,
                 raw_data: row,
               };
@@ -363,26 +367,22 @@ export const useImport = (): UseImportReturn => {
               let operatorError;
 
               if (existingContract) {
-                // UPDATE - registro já existe, atualiza
+                // UPDATE - registro já existe com mesmo contrato+fatura
                 const { error } = await supabase
                   .from('operator_contracts')
                   .update(contractData)
                   .eq('id', existingContract.id);
                 operatorError = error;
                 
-                if (rowIndex <= 7) {
-                  console.log(`[Operadora] Linha ${rowIndex}: ATUALIZANDO registro existente id=${existingContract.id}`);
-                }
+                console.log(`[FATURA] Linha ${rowIndex}: UPDATE (contrato=${idContrato}, fatura=${numeroFatura}, id=${existingContract.id})`);
               } else {
-                // INSERT - registro novo
+                // INSERT - combinação contrato+fatura não existe ainda
                 const { error } = await supabase
                   .from('operator_contracts')
                   .insert(contractData);
                 operatorError = error;
                 
-                if (rowIndex <= 7) {
-                  console.log(`[Operadora] Linha ${rowIndex}: INSERINDO novo registro`);
-                }
+                console.log(`[FATURA] Linha ${rowIndex}: INSERT (contrato=${idContrato}, fatura=${numeroFatura})`);
               }
 
               if (operatorError) {
