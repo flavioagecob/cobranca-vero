@@ -209,20 +209,53 @@ export const useImport = (): UseImportReturn => {
               // Normaliza para apenas números (match com OS)
               const idContrato = idContratoRaw.replace(/\D/g, '');
 
-              // Busca na sales_base pelo OS que faz match com id_contrato
-              const { data: salesRecord, error: salesQueryError } = await supabase
+              // Estratégia 1: Match exato
+              let salesRecord: { id: string; customer_id: string; os: string } | null = null;
+              
+              const { data: exactMatch, error: exactError } = await supabase
                 .from('sales_base')
-                .select('id, customer_id')
+                .select('id, customer_id, os')
                 .eq('os', idContrato)
                 .maybeSingle();
 
-              if (salesQueryError) {
-                errors.push({ row: rowIndex, message: salesQueryError.message });
+              if (exactError) {
+                errors.push({ row: rowIndex, message: exactError.message });
                 continue;
               }
 
+              if (exactMatch) {
+                salesRecord = exactMatch;
+              } else {
+                // Estratégia 2: Match por sufixo (últimos 7 dígitos)
+                const suffix = idContrato.slice(-7);
+                const { data: suffixMatches, error: suffixError } = await supabase
+                  .from('sales_base')
+                  .select('id, customer_id, os')
+                  .like('os', `%${suffix}`);
+
+                if (suffixError) {
+                  errors.push({ row: rowIndex, message: suffixError.message });
+                  continue;
+                }
+
+                if (suffixMatches && suffixMatches.length === 1) {
+                  salesRecord = suffixMatches[0];
+                  console.log(`[Operadora] Match por sufixo: CONTRATO ${idContrato} → OS ${salesRecord.os}`);
+                } else if (suffixMatches && suffixMatches.length > 1) {
+                  // Estratégia 3: Match por sufixo maior (últimos 8 dígitos)
+                  const longerSuffix = idContrato.slice(-8);
+                  const filtered = suffixMatches.filter(s => s.os.endsWith(longerSuffix));
+                  if (filtered.length === 1) {
+                    salesRecord = filtered[0];
+                    console.log(`[Operadora] Match por sufixo longo: CONTRATO ${idContrato} → OS ${salesRecord.os}`);
+                  }
+                }
+              }
+
               if (!salesRecord) {
-                // Contrato não encontrado na base de vendas - registra divergência
+                // Log diagnóstico
+                console.warn(`[Operadora] Linha ${rowIndex}: Não encontrou match para CONTRATO=${idContrato} (raw="${idContratoRaw}")`);
+                
                 errors.push({ 
                   row: rowIndex, 
                   field: 'id_contrato', 
