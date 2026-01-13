@@ -364,17 +364,70 @@ export default function CustomerDetail() {
         </Card>
       </div>
 
-      {/* Future sections placeholder */}
+      {/* Faturas Summary and Collection History */}
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Faturas</CardTitle>
-            <CardDescription>Histórico de faturas do cliente</CardDescription>
+            <CardTitle className="text-base">Resumo de Faturas</CardTitle>
+            <CardDescription>Visão geral das faturas do cliente</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground text-center py-8">
-              Será implementado na Fase 3
-            </p>
+            {customer.operator_contracts && customer.operator_contracts.length > 0 ? (
+              <div className="space-y-4">
+                {(() => {
+                  const contracts = customer.operator_contracts;
+                  const now = new Date();
+                  now.setHours(0, 0, 0, 0);
+                  
+                  const pendingContracts = contracts.filter(c => !c.data_pagamento);
+                  const overdueContracts = pendingContracts.filter(c => {
+                    if (!c.data_vencimento) return false;
+                    const match = c.data_vencimento.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                    if (!match) return false;
+                    const dueDate = new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+                    return dueDate < now;
+                  });
+                  const paidContracts = contracts.filter(c => c.data_pagamento);
+                  
+                  const totalPending = pendingContracts.reduce((sum, c) => sum + (c.valor_fatura || 0), 0);
+                  const totalOverdue = overdueContracts.reduce((sum, c) => sum + (c.valor_fatura || 0), 0);
+                  
+                  return (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-3 rounded-lg bg-muted/50">
+                          <p className="text-2xl font-bold text-destructive">{overdueContracts.length}</p>
+                          <p className="text-xs text-muted-foreground">Vencidas</p>
+                        </div>
+                        <div className="text-center p-3 rounded-lg bg-muted/50">
+                          <p className="text-2xl font-bold text-amber-600">{pendingContracts.length - overdueContracts.length}</p>
+                          <p className="text-xs text-muted-foreground">A vencer</p>
+                        </div>
+                      </div>
+                      <Separator />
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Total vencido:</span>
+                          <span className="font-medium text-destructive">{formatCurrency(totalOverdue)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Total pendente:</span>
+                          <span className="font-medium">{formatCurrency(totalPending)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Faturas pagas:</span>
+                          <span className="font-medium text-emerald-600">{paidContracts.length}</span>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                Nenhuma fatura registrada
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -384,9 +437,13 @@ export default function CustomerDetail() {
             <CardDescription>Tentativas e promessas de pagamento</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground text-center py-8">
-              Será implementado na Fase 4
-            </p>
+            <div className="text-center py-8 text-muted-foreground">
+              <p className="text-sm">Nenhuma tentativa de cobrança registrada</p>
+              <Button variant="outline" size="sm" className="mt-4">
+                <Phone className="h-4 w-4 mr-2" />
+                Registrar Contato
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

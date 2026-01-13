@@ -58,13 +58,23 @@ const parseDate = (value: string | null): string | null => {
   return null;
 };
 
-// Helper to parse currency
+// Helper to parse currency - handles Brazilian format and cents
 const parseCurrency = (value: string | null): number | null => {
   if (!value) return null;
-  const cleaned = value
-    .replace(/[R$\s]/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
+  
+  let cleaned = value.toString().replace(/[R$\s]/g, '').trim();
+  
+  // If it's a pure integer without decimal separators and > 100, assume it's in cents
+  // e.g., "2532" → 25.32 (common in spreadsheets that strip decimal separators)
+  if (/^\d+$/.test(cleaned) && parseInt(cleaned, 10) > 100) {
+    return parseInt(cleaned, 10) / 100;
+  }
+  
+  // Brazilian format: 1.234,56 → remove thousand separator, replace decimal
+  if (cleaned.includes(',')) {
+    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+  }
+  
   const num = parseFloat(cleaned);
   return isNaN(num) ? null : num;
 };
