@@ -38,27 +38,6 @@ const Import = () => {
   const { isLoading: isParsing, error: parseError, parseFile, reset: resetParser } = useXlsxParser();
   const { isImporting, progress, executeImport } = useImport();
 
-  // Check permission
-  if (role !== 'admin') {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-destructive">Acesso Negado</CardTitle>
-            <CardDescription>
-              Apenas administradores podem importar planilhas.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => navigate('/dashboard')}>
-              Voltar ao Dashboard
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   // Initialize mappings when type changes
   const initializeMappings = useCallback((type: ImportType, headers: string[]) => {
     const fields = type === 'sales' ? SALES_FIELDS : OPERATOR_FIELDS;
@@ -179,6 +158,27 @@ const Import = () => {
       .filter((m) => m.sourceColumn)
       .map((m) => m.sourceColumn);
   }, [mappings]);
+
+  // Check permission - MUST be after all hooks
+  if (role !== 'admin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-destructive">Acesso Negado</CardTitle>
+            <CardDescription>
+              Apenas administradores podem importar planilhas.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => navigate('/dashboard')}>
+              Voltar ao Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
