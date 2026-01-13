@@ -23,6 +23,12 @@ const routeLabels: Record<string, string> = {
   users: "Usuários",
 };
 
+// Check if segment is a UUID
+const isUUID = (str: string) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
 export function AppBreadcrumb() {
   const location = useLocation();
   const pathSegments = location.pathname.split("/").filter(Boolean);
@@ -45,6 +51,7 @@ export function AppBreadcrumb() {
   };
 
   const getLabel = (segment: string) => {
+    if (isUUID(segment)) return "Detalhes";
     return routeLabels[segment] || segment.charAt(0).toUpperCase() + segment.slice(1);
   };
 

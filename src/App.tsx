@@ -11,6 +11,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
+import CustomerDetail from "./pages/CustomerDetail";
 import Invoices from "./pages/Invoices";
 import Collection from "./pages/Collection";
 import CollectionKanban from "./pages/CollectionKanban";
@@ -60,6 +61,15 @@ const App = () => (
               element={
                 <ProtectedLayout>
                   <Customers />
+                </ProtectedLayout>
+              } 
+            />
+
+            <Route 
+              path="/customers/:id" 
+              element={
+                <ProtectedLayout>
+                  <CustomerDetail />
                 </ProtectedLayout>
               } 
             />
