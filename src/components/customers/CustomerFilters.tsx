@@ -1,4 +1,4 @@
-import { Search, X } from 'lucide-react';
+import { Search, X, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,11 +25,18 @@ export function CustomerFilters({ filters, onFiltersChange }: CustomerFiltersPro
     onFiltersChange({ ...filters, uf: value === 'all' ? '' : value });
   };
 
+  const handleStatusChange = (value: string) => {
+    onFiltersChange({ 
+      ...filters, 
+      status: value as Filters['status']
+    });
+  };
+
   const clearFilters = () => {
     onFiltersChange({ search: '', uf: '', status: 'all' });
   };
 
-  const hasFilters = filters.search || filters.uf;
+  const hasFilters = filters.search || filters.uf || filters.status !== 'all';
 
   return (
     <div className="flex flex-col sm:flex-row gap-3">
@@ -42,6 +49,20 @@ export function CustomerFilters({ filters, onFiltersChange }: CustomerFiltersPro
           className="pl-10"
         />
       </div>
+
+      <Select value={filters.status} onValueChange={handleStatusChange}>
+        <SelectTrigger className="w-full sm:w-44">
+          <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+          <SelectValue placeholder="Status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
+          <SelectItem value="active">Contrato Ativo</SelectItem>
+          <SelectItem value="pending">Fatura Pendente</SelectItem>
+          <SelectItem value="overdue">Fatura Vencida</SelectItem>
+          <SelectItem value="no_contract">Sem Contrato</SelectItem>
+        </SelectContent>
+      </Select>
 
       <Select value={filters.uf || 'all'} onValueChange={handleUfChange}>
         <SelectTrigger className="w-full sm:w-32">

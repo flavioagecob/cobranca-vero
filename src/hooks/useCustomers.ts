@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { Customer, CustomerWithDetails, CustomerFilters, PaginationState } from '@/types/customer';
+import type { Customer, CustomerWithDetails, CustomerWithOperatorSummary, CustomerFilters, PaginationState } from '@/types/customer';
 
 interface UseCustomersReturn {
-  customers: Customer[];
+  customers: CustomerWithOperatorSummary[];
   isLoading: boolean;
   error: string | null;
   pagination: PaginationState;
@@ -21,7 +21,7 @@ interface UseCustomerDetailReturn {
 }
 
 export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn => {
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<CustomerWithOperatorSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<PaginationState>({
@@ -40,10 +40,63 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
     setError(null);
 
     try {
-      // Build query
+      // First, get customer IDs that match the status filter if needed
+      let customerIdsWithStatus: string[] | null = null;
+      
+      if (filters.status !== 'all') {
+        const today = new Date().toISOString().split('T')[0];
+        
+        if (filters.status === 'no_contract') {
+          // Get customers WITHOUT contracts
+          const { data: allCustomers } = await supabase
+            .from('customers')
+            .select('id');
+          
+          const { data: customersWithContracts } = await supabase
+            .from('operator_contracts')
+            .select('customer_id');
+          
+          const withContractIds = new Set((customersWithContracts || []).map(c => c.customer_id));
+          customerIdsWithStatus = (allCustomers || [])
+            .map(c => c.id)
+            .filter(id => !withContractIds.has(id));
+        } else {
+          // Build contract query based on status
+          let contractQuery = supabase.from('operator_contracts').select('customer_id');
+          
+          if (filters.status === 'active') {
+            contractQuery = contractQuery.or('status_operadora.ilike.ativo,status_operadora.ilike.active');
+          } else if (filters.status === 'pending') {
+            contractQuery = contractQuery.or('status_contrato.ilike.pendente,status_contrato.ilike.pending,status_contrato.ilike.aberto');
+          } else if (filters.status === 'overdue') {
+            contractQuery = contractQuery
+              .lt('data_vencimento', today)
+              .not('status_contrato', 'ilike', 'pago')
+              .not('status_contrato', 'ilike', 'paid');
+          }
+          
+          const { data: contractsData } = await contractQuery;
+          customerIdsWithStatus = [...new Set((contractsData || []).map(c => c.customer_id))];
+        }
+        
+        // If no customers match the status filter, return empty
+        if (customerIdsWithStatus.length === 0) {
+          setCustomers([]);
+          setPagination((prev) => ({ ...prev, total: 0 }));
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Build main customers query
       let query = supabase
         .from('customers')
         .select('*', { count: 'exact' });
+
+      // Apply status filter (customer IDs)
+      if (customerIdsWithStatus) {
+        query = query.in('id', customerIdsWithStatus);
+      }
 
       // Apply search filter
       if (filters.search) {
@@ -64,11 +117,71 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         .order('nome', { ascending: true })
         .range(from, to);
 
-      const { data, error: queryError, count } = await query;
+      const { data: customersData, error: queryError, count } = await query;
 
       if (queryError) throw queryError;
 
-      setCustomers(data || []);
+      // Now fetch operator data for these customers
+      const customerIds = (customersData || []).map(c => c.id);
+      
+      let operatorSummary: Record<string, {
+        contracts_count: number;
+        total_valor_pendente: number;
+        status_contrato: string | null;
+        proxima_data_vencimento: string | null;
+      }> = {};
+
+      if (customerIds.length > 0) {
+        const { data: contractsData } = await supabase
+          .from('operator_contracts')
+          .select('customer_id, status_contrato, status_operadora, valor_fatura, data_vencimento')
+          .in('customer_id', customerIds);
+
+        // Aggregate data per customer
+        (contractsData || []).forEach((contract) => {
+          const customerId = contract.customer_id;
+          if (!operatorSummary[customerId]) {
+            operatorSummary[customerId] = {
+              contracts_count: 0,
+              total_valor_pendente: 0,
+              status_contrato: null,
+              proxima_data_vencimento: null,
+            };
+          }
+
+          operatorSummary[customerId].contracts_count++;
+
+          // Sum pending values
+          const statusContrato = (contract.status_contrato || '').toLowerCase();
+          if (statusContrato === 'pendente' || statusContrato === 'pending' || statusContrato === 'aberto') {
+            operatorSummary[customerId].total_valor_pendente += contract.valor_fatura || 0;
+          }
+
+          // Get latest status (just use the first one found)
+          if (!operatorSummary[customerId].status_contrato && contract.status_operadora) {
+            operatorSummary[customerId].status_contrato = contract.status_operadora;
+          }
+
+          // Get next due date (closest in the future or most recent overdue)
+          if (contract.data_vencimento) {
+            const current = operatorSummary[customerId].proxima_data_vencimento;
+            if (!current || contract.data_vencimento < current) {
+              operatorSummary[customerId].proxima_data_vencimento = contract.data_vencimento;
+            }
+          }
+        });
+      }
+
+      // Merge customers with operator summary
+      const customersWithSummary: CustomerWithOperatorSummary[] = (customersData || []).map((customer) => ({
+        ...customer,
+        contracts_count: operatorSummary[customer.id]?.contracts_count || 0,
+        total_valor_pendente: operatorSummary[customer.id]?.total_valor_pendente || 0,
+        status_contrato: operatorSummary[customer.id]?.status_contrato || null,
+        proxima_data_vencimento: operatorSummary[customer.id]?.proxima_data_vencimento || null,
+      }));
+
+      setCustomers(customersWithSummary);
       setPagination((prev) => ({ ...prev, total: count || 0 }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar clientes');
@@ -140,12 +253,12 @@ export const useCustomerDetail = (customerId: string | undefined): UseCustomerDe
         .eq('customer_id', customerId)
         .order('data_venda', { ascending: false });
 
-      // Fetch operator contracts
+      // Fetch operator contracts - order by due date (most urgent first)
       const { data: contractsData } = await supabase
         .from('operator_contracts')
         .select('*')
         .eq('customer_id', customerId)
-        .order('data_ativacao', { ascending: false });
+        .order('data_vencimento', { ascending: true, nullsFirst: false });
 
       const customerWithDetails: CustomerWithDetails = {
         ...customerData,

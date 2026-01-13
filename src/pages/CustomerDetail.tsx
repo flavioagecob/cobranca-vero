@@ -283,42 +283,73 @@ export default function CustomerDetail() {
 
               <TabsContent value="contracts" className="mt-0">
                 {customer.operator_contracts && customer.operator_contracts.length > 0 ? (
-                  <div className="rounded-md border">
+                  <div className="rounded-md border overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>ID Contrato</TableHead>
-                          <TableHead>Nº Contrato</TableHead>
+                          <TableHead>Nº Fatura</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Valor</TableHead>
-                          <TableHead>Ativação</TableHead>
+                          <TableHead>Valor Fatura</TableHead>
+                          <TableHead>Vencimento</TableHead>
+                          <TableHead>Pagamento</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {customer.operator_contracts.map((contract) => (
-                          <TableRow key={contract.id}>
-                            <TableCell className="font-mono text-sm font-medium">
-                              {contract.id_contrato}
-                            </TableCell>
-                            <TableCell>
-                              {contract.numero_contrato_operadora || '-'}
-                            </TableCell>
-                            <TableCell>
-                              {contract.status_operadora ? (
-                                <Badge 
-                                  variant="outline" 
-                                  className={getStatusColor(contract.status_operadora)}
-                                >
-                                  {contract.status_operadora}
-                                </Badge>
-                              ) : (
-                                '-'
-                              )}
-                            </TableCell>
-                            <TableCell>{formatCurrency(contract.valor_contrato)}</TableCell>
-                            <TableCell>{formatDate(contract.data_ativacao)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {customer.operator_contracts.map((contract) => {
+                          const isOverdue = contract.data_vencimento && 
+                            new Date(contract.data_vencimento) < new Date() &&
+                            !contract.data_pagamento;
+                          const isPaid = !!contract.data_pagamento;
+                          
+                          return (
+                            <TableRow 
+                              key={contract.id}
+                              className={isOverdue ? 'bg-destructive/5' : isPaid ? 'bg-emerald-500/5' : undefined}
+                            >
+                              <TableCell className="font-mono text-sm font-medium">
+                                {contract.id_contrato}
+                              </TableCell>
+                              <TableCell className="font-mono text-sm">
+                                {contract.numero_fatura || '-'}
+                              </TableCell>
+                              <TableCell>
+                                {contract.status_contrato ? (
+                                  <Badge 
+                                    variant="outline" 
+                                    className={getStatusColor(contract.status_contrato)}
+                                  >
+                                    {contract.status_contrato}
+                                  </Badge>
+                                ) : contract.status_operadora ? (
+                                  <Badge 
+                                    variant="outline" 
+                                    className={getStatusColor(contract.status_operadora)}
+                                  >
+                                    {contract.status_operadora}
+                                  </Badge>
+                                ) : (
+                                  '-'
+                                )}
+                              </TableCell>
+                              <TableCell className={isOverdue ? 'font-medium text-destructive' : ''}>
+                                {formatCurrency(contract.valor_fatura || contract.valor_contrato)}
+                              </TableCell>
+                              <TableCell className={isOverdue ? 'font-medium text-destructive' : ''}>
+                                {formatDate(contract.data_vencimento)}
+                              </TableCell>
+                              <TableCell>
+                                {contract.data_pagamento ? (
+                                  <span className="text-emerald-600 font-medium">
+                                    {formatDate(contract.data_pagamento)}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
