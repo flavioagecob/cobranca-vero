@@ -1,0 +1,364 @@
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { 
+  ArrowLeft, 
+  Phone, 
+  Mail, 
+  MapPin, 
+  Calendar, 
+  FileText, 
+  Building2,
+  User,
+  Copy,
+  ExternalLink
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { useCustomerDetail } from '@/hooks/useCustomers';
+import { 
+  formatCpfCnpj, 
+  formatPhone, 
+  formatDate, 
+  formatCurrency,
+  getStatusColor 
+} from '@/lib/formatters';
+import { toast } from 'sonner';
+
+export default function CustomerDetail() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { customer, isLoading, error } = useCustomerDetail(id);
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copiado!`);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-10 w-10" />
+          <div>
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-32 mt-1" />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Skeleton className="h-48" />
+          <Skeleton className="h-48" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !customer) {
+    return (
+      <div className="space-y-6">
+        <Button variant="ghost" onClick={() => navigate('/customers')}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Voltar
+        </Button>
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <p className="text-destructive font-medium">
+                {error || 'Cliente não encontrado'}
+              </p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => navigate('/customers')}
+              >
+                Voltar para lista
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const whatsappLink = customer.telefone
+    ? `https://wa.me/55${customer.telefone.replace(/\D/g, '')}`
+    : null;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/customers')}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+              <User className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">{customer.nome}</h1>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span className="font-mono text-sm">{formatCpfCnpj(customer.cpf_cnpj)}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={() => copyToClipboard(customer.cpf_cnpj, 'CPF/CNPJ')}
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {whatsappLink && (
+            <Button variant="outline" size="sm" asChild>
+              <a href={whatsappLink} target="_blank" rel="noopener noreferrer">
+                <Phone className="h-4 w-4 mr-2" />
+                WhatsApp
+                <ExternalLink className="h-3 w-3 ml-1" />
+              </a>
+            </Button>
+          )}
+          <Button size="sm">
+            <Phone className="h-4 w-4 mr-2" />
+            Iniciar Cobrança
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Customer Info Card */}
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-base">Informações do Cliente</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Contact Info */}
+            <div className="space-y-3">
+              {customer.telefone && (
+                <div className="flex items-center gap-3">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">{formatPhone(customer.telefone)}</p>
+                    <p className="text-xs text-muted-foreground">Telefone principal</p>
+                  </div>
+                </div>
+              )}
+              {customer.telefone2 && (
+                <div className="flex items-center gap-3">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">{formatPhone(customer.telefone2)}</p>
+                    <p className="text-xs text-muted-foreground">Telefone secundário</p>
+                  </div>
+                </div>
+              )}
+              {customer.email && (
+                <div className="flex items-center gap-3">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium break-all">{customer.email}</p>
+                    <p className="text-xs text-muted-foreground">E-mail</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Address */}
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div>
+                  {customer.endereco && (
+                    <p className="text-sm font-medium">{customer.endereco}</p>
+                  )}
+                  {(customer.cidade || customer.uf) && (
+                    <p className="text-sm text-muted-foreground">
+                      {customer.cidade}{customer.cidade && customer.uf && ' - '}{customer.uf}
+                    </p>
+                  )}
+                  {customer.cep && (
+                    <p className="text-sm text-muted-foreground">CEP: {customer.cep}</p>
+                  )}
+                  {!customer.endereco && !customer.cidade && !customer.uf && (
+                    <p className="text-sm text-muted-foreground">Endereço não informado</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Dates */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">{formatDate(customer.created_at)}</p>
+                  <p className="text-xs text-muted-foreground">Cadastrado em</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Tabs for Sales and Contracts */}
+        <Card className="lg:col-span-2">
+          <Tabs defaultValue="sales" className="w-full">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Histórico</CardTitle>
+                <TabsList>
+                  <TabsTrigger value="sales" className="flex items-center gap-1">
+                    <FileText className="h-4 w-4" />
+                    Vendas ({customer.total_sales || 0})
+                  </TabsTrigger>
+                  <TabsTrigger value="contracts" className="flex items-center gap-1">
+                    <Building2 className="h-4 w-4" />
+                    Contratos ({customer.total_contracts || 0})
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <TabsContent value="sales" className="mt-0">
+                {customer.sales_base && customer.sales_base.length > 0 ? (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>OS</TableHead>
+                          <TableHead>Produto/Plano</TableHead>
+                          <TableHead>Valor</TableHead>
+                          <TableHead>Data Venda</TableHead>
+                          <TableHead>Vendedor</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {customer.sales_base.map((sale) => (
+                          <TableRow key={sale.id}>
+                            <TableCell className="font-mono text-sm font-medium">
+                              {sale.os}
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                {sale.produto && (
+                                  <p className="font-medium">{sale.produto}</p>
+                                )}
+                                {sale.plano && (
+                                  <p className="text-sm text-muted-foreground">{sale.plano}</p>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>{formatCurrency(sale.valor_plano)}</TableCell>
+                            <TableCell>{formatDate(sale.data_venda)}</TableCell>
+                            <TableCell>{sale.vendedor || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhuma venda registrada
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="contracts" className="mt-0">
+                {customer.operator_contracts && customer.operator_contracts.length > 0 ? (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID Contrato</TableHead>
+                          <TableHead>Nº Contrato</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Valor</TableHead>
+                          <TableHead>Ativação</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {customer.operator_contracts.map((contract) => (
+                          <TableRow key={contract.id}>
+                            <TableCell className="font-mono text-sm font-medium">
+                              {contract.id_contrato}
+                            </TableCell>
+                            <TableCell>
+                              {contract.numero_contrato_operadora || '-'}
+                            </TableCell>
+                            <TableCell>
+                              {contract.status_operadora ? (
+                                <Badge 
+                                  variant="outline" 
+                                  className={getStatusColor(contract.status_operadora)}
+                                >
+                                  {contract.status_operadora}
+                                </Badge>
+                              ) : (
+                                '-'
+                              )}
+                            </TableCell>
+                            <TableCell>{formatCurrency(contract.valor_contrato)}</TableCell>
+                            <TableCell>{formatDate(contract.data_ativacao)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhum contrato registrado
+                  </div>
+                )}
+              </TabsContent>
+            </CardContent>
+          </Tabs>
+        </Card>
+      </div>
+
+      {/* Future sections placeholder */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Faturas</CardTitle>
+            <CardDescription>Histórico de faturas do cliente</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Será implementado na Fase 3
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Histórico de Cobrança</CardTitle>
+            <CardDescription>Tentativas e promessas de pagamento</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Será implementado na Fase 4
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
