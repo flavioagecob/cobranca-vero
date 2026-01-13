@@ -55,18 +55,19 @@ export const SALES_FIELDS: ColumnMapping[] = [
 
 export const OPERATOR_FIELDS: ColumnMapping[] = [
   { sourceColumn: '', targetField: 'id_contrato', required: true },
-  { sourceColumn: '', targetField: 'cpf_cnpj', required: true },
-  { sourceColumn: '', targetField: 'nome', required: true },
-  { sourceColumn: '', targetField: 'numero_contrato_operadora', required: false },
-  { sourceColumn: '', targetField: 'status_operadora', required: false },
-  { sourceColumn: '', targetField: 'data_ativacao', required: false },
-  { sourceColumn: '', targetField: 'data_cancelamento', required: false },
-  { sourceColumn: '', targetField: 'valor_contrato', required: false },
+  { sourceColumn: '', targetField: 'numero_fatura', required: false },
+  { sourceColumn: '', targetField: 'status_contrato', required: false },
+  { sourceColumn: '', targetField: 'data_cadastro', required: false },
+  { sourceColumn: '', targetField: 'mes_safra_cadastro', required: false },
+  { sourceColumn: '', targetField: 'mes_safra_vencimento', required: false },
+  { sourceColumn: '', targetField: 'data_vencimento', required: false },
+  { sourceColumn: '', targetField: 'data_pagamento', required: false },
+  { sourceColumn: '', targetField: 'valor_fatura', required: false },
 ];
 
 export const FIELD_LABELS: Record<string, string> = {
+  // Campos Base de Vendas
   os: 'OS (Ordem de Serviço)',
-  id_contrato: 'ID Contrato',
   cpf_cnpj: 'CPF/CNPJ',
   nome: 'Nome',
   email: 'E-mail',
@@ -81,9 +82,14 @@ export const FIELD_LABELS: Record<string, string> = {
   valor_plano: 'Valor do Plano',
   data_venda: 'Data da Venda',
   vendedor: 'Vendedor',
-  numero_contrato_operadora: 'Nº Contrato Operadora',
-  status_operadora: 'Status Operadora',
-  data_ativacao: 'Data Ativação',
-  data_cancelamento: 'Data Cancelamento',
-  valor_contrato: 'Valor Contrato',
+  // Campos Base Operadora
+  id_contrato: 'ID Contrato (CONTRATO)',
+  numero_fatura: 'Número da Fatura',
+  status_contrato: 'Status do Contrato',
+  data_cadastro: 'Data de Cadastro',
+  mes_safra_cadastro: 'Mês Safra Cadastro',
+  mes_safra_vencimento: 'Mês Safra Vencimento',
+  data_vencimento: 'Data de Vencimento',
+  data_pagamento: 'Data de Pagamento',
+  valor_fatura: 'Valor da Fatura',
 };
