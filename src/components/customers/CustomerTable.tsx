@@ -72,7 +72,16 @@ export function CustomerTable({ customers, isLoading }: CustomerTableProps) {
     const daysOverdue = calculateDaysOverdue(dueDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const due = new Date(dueDate);
+    
+    // Parse a data corretamente para evitar problemas de timezone
+    let due: Date;
+    const isoDateMatch = dueDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoDateMatch) {
+      const [, year, month, day] = isoDateMatch;
+      due = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    } else {
+      due = new Date(dueDate);
+    }
     due.setHours(0, 0, 0, 0);
     
     if (daysOverdue > 0) {
