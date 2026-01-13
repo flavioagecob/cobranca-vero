@@ -19,7 +19,8 @@ export const useXlsxParser = (): UseXlsxParserReturn => {
 
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+      // Use raw: true to preserve original numeric values without formatting
+      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true, raw: true });
       
       // Get first sheet
       const sheetName = workbook.SheetNames[0];
@@ -30,7 +31,7 @@ export const useXlsxParser = (): UseXlsxParserReturn => {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
         header: 1,
-        raw: false,
+        raw: true, // Keep raw values to preserve large numbers
         defval: '',
       });
 
@@ -47,6 +48,32 @@ export const useXlsxParser = (): UseXlsxParserReturn => {
         throw new Error('Nenhum cabeçalho encontrado na primeira linha');
       }
 
+      // Helper to safely convert cell value preserving large numbers
+      const formatCellValue = (value: unknown): string | null => {
+        if (value === undefined || value === null || value === '') return null;
+        
+        // Handle numbers - convert to string without scientific notation
+        if (typeof value === 'number') {
+          // Check if it's an integer (likely an ID/contract number)
+          if (Number.isInteger(value)) {
+            return String(value);
+          }
+          // For floats, use toFixed to avoid scientific notation
+          return value.toFixed(10).replace(/\.?0+$/, '');
+        }
+        
+        // Handle strings that might be scientific notation
+        const strValue = String(value).trim();
+        if (/^[\d.]+[eE][+-]?\d+$/.test(strValue)) {
+          const num = parseFloat(strValue);
+          if (!isNaN(num) && Number.isInteger(num)) {
+            return String(Math.round(num));
+          }
+        }
+        
+        return strValue;
+      };
+
       // Parse data rows
       const rows: ParsedRow[] = [];
       for (let i = 1; i < jsonData.length; i++) {
@@ -57,8 +84,7 @@ export const useXlsxParser = (): UseXlsxParserReturn => {
 
         const row: ParsedRow = {};
         headers.forEach((header, index) => {
-          const value = rowData[index];
-          row[header] = value !== undefined && value !== null ? String(value).trim() : null;
+          row[header] = formatCellValue(rowData[index]);
         });
         rows.push(row);
       }
