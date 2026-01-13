@@ -77,7 +77,6 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
           data_vencimento,
           data_pagamento,
           created_at,
-          updated_at,
           customer:customers(id, nome, cpf_cnpj, telefone, email)
         `, { count: 'exact' });
 
@@ -124,7 +123,7 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
           dias_atraso: diasAtraso,
           observacoes: null,
           created_at: contract.created_at,
-          updated_at: contract.updated_at,
+          updated_at: contract.created_at,
           customer: customerData,
         };
       });
