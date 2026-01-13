@@ -336,23 +336,54 @@ export const useImport = (): UseImportReturn => {
                 });
               }
               
-              const { error: operatorError } = await supabase
+              // Verificar se já existe um registro com esse contrato+fatura
+              const { data: existingContract } = await supabase
                 .from('operator_contracts')
-                .upsert({
-                  customer_id: salesRecord.customer_id,
-                  sales_base_id: salesRecord.id,
-                  id_contrato: idContrato,
-                  numero_fatura: numeroFatura,
-                  status_contrato: getValue('status_contrato'),
-                  data_cadastro: parseDate(getValue('data_cadastro')),
-                  mes_safra_cadastro: getValue('mes_safra_cadastro'),
-                  mes_safra_vencimento: getValue('mes_safra_vencimento'),
-                  data_vencimento: parseDate(getValue('data_vencimento')),
-                  data_pagamento: parseDate(getValue('data_pagamento')),
-                  valor_fatura: parseCurrency(getValue('valor_fatura')),
-                  import_batch_id: batchId,
-                  raw_data: row,
-                }, { onConflict: 'id_contrato,numero_fatura' });
+                .select('id')
+                .eq('id_contrato', idContrato)
+                .eq('numero_fatura', numeroFatura)
+                .maybeSingle();
+
+              const contractData = {
+                customer_id: salesRecord.customer_id,
+                sales_base_id: salesRecord.id,
+                id_contrato: idContrato,
+                numero_fatura: numeroFatura,
+                status_contrato: getValue('status_contrato'),
+                data_cadastro: parseDate(getValue('data_cadastro')),
+                mes_safra_cadastro: getValue('mes_safra_cadastro'),
+                mes_safra_vencimento: getValue('mes_safra_vencimento'),
+                data_vencimento: parseDate(getValue('data_vencimento')),
+                data_pagamento: parseDate(getValue('data_pagamento')),
+                valor_fatura: parseCurrency(getValue('valor_fatura')),
+                import_batch_id: batchId,
+                raw_data: row,
+              };
+
+              let operatorError;
+
+              if (existingContract) {
+                // UPDATE - registro já existe, atualiza
+                const { error } = await supabase
+                  .from('operator_contracts')
+                  .update(contractData)
+                  .eq('id', existingContract.id);
+                operatorError = error;
+                
+                if (rowIndex <= 7) {
+                  console.log(`[Operadora] Linha ${rowIndex}: ATUALIZANDO registro existente id=${existingContract.id}`);
+                }
+              } else {
+                // INSERT - registro novo
+                const { error } = await supabase
+                  .from('operator_contracts')
+                  .insert(contractData);
+                operatorError = error;
+                
+                if (rowIndex <= 7) {
+                  console.log(`[Operadora] Linha ${rowIndex}: INSERINDO novo registro`);
+                }
+              }
 
               if (operatorError) {
                 errors.push({ row: rowIndex, message: operatorError.message });
