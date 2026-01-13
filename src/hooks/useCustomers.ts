@@ -161,8 +161,8 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
             operatorSummary[customerId].status_contrato = contract.status_operadora;
           }
 
-          // Get next due date (closest in the future or most recent overdue)
-          if (contract.data_vencimento) {
+          // Get next due date ONLY for unpaid invoices
+          if (isPending && contract.data_vencimento) {
             const current = operatorSummary[customerId].proxima_data_vencimento;
             if (!current || contract.data_vencimento < current) {
               operatorSummary[customerId].proxima_data_vencimento = contract.data_vencimento;
