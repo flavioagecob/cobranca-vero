@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileSpreadsheet, Building2 } from 'lucide-react';
+import { FileSpreadsheet, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -181,22 +181,15 @@ const Import = () => {
   }, [mappings]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">Importar Planilhas</h1>
-            <p className="text-sm text-muted-foreground">
-              Carregue dados de vendas ou contratos da operadora
-            </p>
-          </div>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Importar Planilhas</h1>
+        <p className="text-muted-foreground">
+          Carregue dados de vendas ou contratos da operadora
+        </p>
+      </div>
 
-      <main className="container mx-auto px-4 py-6">
+      <div>
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -304,7 +297,7 @@ const Import = () => {
             )}
           </CardContent>
         </Card>
-      </main>
+      </div>
     </div>
   );
 };
