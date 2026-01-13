@@ -298,16 +298,41 @@ export const useImport = (): UseImportReturn => {
 
               // Usa o customer_id encontrado na sales_base
               const numeroFaturaRaw = getValue('numero_fatura');
-              const numeroFatura = numeroFaturaRaw || '1'; // Default para "1" apenas se não mapeado
+              
+              // Normaliza numero_fatura: remove espaços e extrai dígitos se necessário
+              let numeroFatura = (numeroFaturaRaw || '').toString().trim();
+              
+              // Se for só dígitos, usa direto; senão tenta extrair
+              if (!/^\d+$/.test(numeroFatura)) {
+                const digitsOnly = numeroFatura.replace(/\D/g, '');
+                numeroFatura = digitsOnly || '';
+              }
+              
+              // VALIDAÇÃO OBRIGATÓRIA: numero_fatura não pode ser vazio
+              if (!numeroFatura) {
+                errors.push({ 
+                  row: rowIndex, 
+                  field: 'numero_fatura', 
+                  message: 'Número da fatura obrigatório - verifique o mapeamento da coluna FATURA' 
+                });
+                
+                // Log detalhado para diagnóstico
+                if (errors.filter(e => e.field === 'numero_fatura').length <= 5) {
+                  console.warn(`[Operadora] Linha ${rowIndex}: numero_fatura vazio!`, {
+                    numero_fatura_raw: numeroFaturaRaw,
+                    mapeamento: fieldMap['numero_fatura'] || '(não mapeado)',
+                    headers_disponiveis: Object.keys(row).slice(0, 10),
+                  });
+                }
+                continue;
+              }
               
               // Log detalhado para debug das primeiras linhas
               if (rowIndex <= 7) {
                 console.log(`[Operadora] Linha ${rowIndex} - FATURA:`, {
                   numero_fatura_raw: numeroFaturaRaw,
-                  numero_fatura_usado: numeroFatura,
+                  numero_fatura_normalizado: numeroFatura,
                   mapeamento_numero_fatura: fieldMap['numero_fatura'] || '(não mapeado)',
-                  colunas_da_linha: Object.keys(row),
-                  valores_linha: row,
                 });
               }
               

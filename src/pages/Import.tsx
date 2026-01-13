@@ -1,9 +1,10 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileSpreadsheet, Building2 } from 'lucide-react';
+import { FileSpreadsheet, Building2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { FileUploadZone } from '@/components/import/FileUploadZone';
 import { ColumnMapper } from '@/components/import/ColumnMapper';
 import { DataPreview } from '@/components/import/DataPreview';
@@ -187,6 +188,77 @@ const Import = () => {
       .map((m) => m.sourceColumn);
   }, [mappings]);
 
+  // Pre-validation for operator import - detect potential issues before import
+  const mappingWarnings = useMemo(() => {
+    if (importType !== 'operator' || !preview || preview.rows.length === 0) {
+      return null;
+    }
+    
+    const numeroFaturaMapping = mappings.find(m => m.targetField === 'numero_fatura');
+    const idContratoMapping = mappings.find(m => m.targetField === 'id_contrato');
+    
+    if (!numeroFaturaMapping?.sourceColumn) {
+      return {
+        type: 'error' as const,
+        title: 'Coluna FATURA não mapeada',
+        message: 'O campo "Número da Fatura" é obrigatório para importação da operadora. Mapeie a coluna que contém o número da fatura (1, 2, 3...).',
+      };
+    }
+    
+    // Check first 50 rows for issues
+    const sampleRows = preview.rows.slice(0, 50);
+    const faturaCol = numeroFaturaMapping.sourceColumn;
+    const contratoCol = idContratoMapping?.sourceColumn;
+    
+    let emptyFaturas = 0;
+    const pairs = new Set<string>();
+    const duplicatePairs: string[] = [];
+    
+    for (const row of sampleRows) {
+      const fatura = String(row[faturaCol] || '').trim();
+      const contrato = contratoCol ? String(row[contratoCol] || '').trim() : '';
+      
+      if (!fatura || fatura === '' || fatura === 'null' || fatura === 'undefined') {
+        emptyFaturas++;
+      }
+      
+      if (contrato && fatura) {
+        const pair = `${contrato}|${fatura}`;
+        if (pairs.has(pair)) {
+          duplicatePairs.push(pair);
+        } else {
+          pairs.add(pair);
+        }
+      }
+    }
+    
+    if (emptyFaturas > sampleRows.length * 0.5) {
+      return {
+        type: 'error' as const,
+        title: 'Muitas faturas vazias detectadas',
+        message: `${emptyFaturas} de ${sampleRows.length} linhas têm o campo FATURA vazio. Verifique se a coluna "${faturaCol}" está correta.`,
+      };
+    }
+    
+    if (emptyFaturas > 0) {
+      return {
+        type: 'warning' as const,
+        title: 'Algumas faturas vazias',
+        message: `${emptyFaturas} linha(s) com FATURA vazia serão ignoradas na importação.`,
+      };
+    }
+    
+    if (duplicatePairs.length > 0) {
+      return {
+        type: 'warning' as const,
+        title: 'Duplicidades detectadas',
+        message: `Existem ${duplicatePairs.length} pares (contrato + fatura) duplicados. A última ocorrência sobrescreverá as anteriores.`,
+      };
+    }
+    
+    return null;
+  }, [importType, preview, mappings]);
+
   // Check permission - MUST be after all hooks
   if (role !== 'admin') {
     return (
@@ -294,6 +366,14 @@ const Import = () => {
                   onMappingChange={handleMappingChange}
                 />
 
+                {mappingWarnings && (
+                  <Alert variant={mappingWarnings.type === 'error' ? 'destructive' : 'default'}>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>{mappingWarnings.title}</AlertTitle>
+                    <AlertDescription>{mappingWarnings.message}</AlertDescription>
+                  </Alert>
+                )}
+
                 <DataPreview
                   headers={preview.headers}
                   rows={preview.rows}
@@ -305,7 +385,10 @@ const Import = () => {
                   <Button variant="outline" onClick={handleReset}>
                     Voltar
                   </Button>
-                  <Button onClick={handleImport} disabled={!isMappingValid}>
+                  <Button 
+                    onClick={handleImport} 
+                    disabled={!isMappingValid || mappingWarnings?.type === 'error'}
+                  >
                     Importar {preview.totalRows} Registros
                   </Button>
                 </div>
