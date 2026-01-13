@@ -11,6 +11,7 @@ export interface Invoice {
   data_pagamento: string | null;
   status: InvoiceStatus;
   dias_atraso: number;
+  mes_safra_cadastro: string | null;
   observacoes: string | null;
   created_at: string;
   updated_at: string;

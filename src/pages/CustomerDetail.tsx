@@ -288,6 +288,7 @@ export default function CustomerDetail() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>ID Contrato</TableHead>
+                          <TableHead>Safra</TableHead>
                           <TableHead>Nº Fatura</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Valor Fatura</TableHead>
@@ -309,6 +310,9 @@ export default function CustomerDetail() {
                             >
                               <TableCell className="font-mono text-sm font-medium">
                                 {contract.id_contrato}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {contract.mes_safra_cadastro || '-'}
                               </TableCell>
                               <TableCell className="font-mono text-sm">
                                 {contract.numero_fatura || '-'}
