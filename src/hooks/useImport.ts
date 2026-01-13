@@ -58,17 +58,17 @@ const parseDate = (value: string | null): string | null => {
   return null;
 };
 
-// Helper to parse currency - handles Brazilian format and cents
-const parseCurrency = (value: string | null): number | null => {
-  if (!value) return null;
+// Helper to parse currency - handles Brazilian format and XLSX numbers
+const parseCurrency = (value: string | number | null | undefined): number | null => {
+  if (value === null || value === undefined) return null;
+  
+  // Se já é number (comum em XLSX), retorna direto
+  if (typeof value === 'number') {
+    return isNaN(value) ? null : value;
+  }
   
   let cleaned = value.toString().replace(/[R$\s]/g, '').trim();
-  
-  // If it's a pure integer without decimal separators and > 100, assume it's in cents
-  // e.g., "2532" → 25.32 (common in spreadsheets that strip decimal separators)
-  if (/^\d+$/.test(cleaned) && parseInt(cleaned, 10) > 100) {
-    return parseInt(cleaned, 10) / 100;
-  }
+  if (!cleaned) return null;
   
   // Brazilian format: 1.234,56 → remove thousand separator, replace decimal
   if (cleaned.includes(',')) {
@@ -131,10 +131,20 @@ export const useImport = (): UseImportReturn => {
           const rowIndex = i * batchSize + j + 2; // +2 for header and 1-indexed
 
           try {
-            // Extract mapped values
-            const getValue = (field: string): string | null => {
+            // Extract mapped values - preserva tipo original (number/string)
+            const getValue = (field: string): string | number | null => {
               const sourceCol = fieldMap[field];
-              return sourceCol ? (row[sourceCol] as string) || null : null;
+              if (!sourceCol) return null;
+              const val = row[sourceCol];
+              if (val === null || val === undefined || val === '') return null;
+              return val as string | number;
+            };
+            
+            // Helper para obter como string (para campos texto)
+            const getStringValue = (field: string): string | null => {
+              const val = getValue(field);
+              if (val === null) return null;
+              return String(val);
             };
 
             // Para tipo 'sales', precisa criar/atualizar customer
@@ -142,8 +152,8 @@ export const useImport = (): UseImportReturn => {
             let customer: { id: string } | null = null;
 
             if (type === 'sales') {
-              const cpfCnpj = formatCpfCnpj(getValue('cpf_cnpj'));
-              const nome = getValue('nome');
+              const cpfCnpj = formatCpfCnpj(getStringValue('cpf_cnpj'));
+              const nome = getStringValue('nome');
 
               if (!cpfCnpj) {
                 errors.push({ row: rowIndex, field: 'cpf_cnpj', message: 'CPF/CNPJ obrigatório' });
@@ -161,13 +171,13 @@ export const useImport = (): UseImportReturn => {
                 .upsert({
                   cpf_cnpj: cpfCnpj,
                   nome,
-                  email: getValue('email'),
-                  telefone: getValue('telefone'),
-                  telefone2: getValue('telefone2'),
-                  endereco: getValue('endereco'),
-                  cidade: getValue('cidade'),
-                  uf: getValue('uf'),
-                  cep: getValue('cep'),
+                  email: getStringValue('email'),
+                  telefone: getStringValue('telefone'),
+                  telefone2: getStringValue('telefone2'),
+                  endereco: getStringValue('endereco'),
+                  cidade: getStringValue('cidade'),
+                  uf: getStringValue('uf'),
+                  cep: getStringValue('cep'),
                 }, { onConflict: 'cpf_cnpj' })
                 .select()
                 .single();
@@ -182,7 +192,7 @@ export const useImport = (): UseImportReturn => {
 
             // Insert type-specific record
             if (type === 'sales') {
-              const os = getValue('os');
+              const os = getStringValue('os');
               if (!os) {
                 errors.push({ row: rowIndex, field: 'os', message: 'OS obrigatória' });
                 continue;
@@ -193,11 +203,11 @@ export const useImport = (): UseImportReturn => {
                 .insert({
                   customer_id: customer.id,
                   os: os.replace(/\D/g, ''), // Normaliza para apenas números
-                  produto: getValue('produto'),
-                  plano: getValue('plano'),
+                  produto: getStringValue('produto'),
+                  plano: getStringValue('plano'),
                   valor_plano: parseCurrency(getValue('valor_plano')),
-                  data_venda: parseDate(getValue('data_venda')),
-                  vendedor: getValue('vendedor'),
+                  data_venda: parseDate(getStringValue('data_venda')),
+                  vendedor: getStringValue('vendedor'),
                   import_batch_id: batchId,
                   raw_data: row,
                 });
@@ -210,7 +220,7 @@ export const useImport = (): UseImportReturn => {
               successCount++;
             } else {
               // Tipo 'operator' - faz match pelo id_contrato com sales_base.os
-              const idContratoRaw = getValue('id_contrato');
+              const idContratoRaw = getStringValue('id_contrato');
               if (!idContratoRaw) {
                 errors.push({ row: rowIndex, field: 'id_contrato', message: 'ID Contrato obrigatório' });
                 continue;
@@ -329,7 +339,7 @@ export const useImport = (): UseImportReturn => {
               
               // Dados da fatura atual
               const valorFatura = parseCurrency(getValue('valor_fatura'));
-              const dataVencimento = parseDate(getValue('data_vencimento'));
+              const dataVencimento = parseDate(getStringValue('data_vencimento'));
               
               // Log detalhado para TODAS as faturas do mesmo contrato (debug)
               console.log(`[FATURA] Linha ${rowIndex}:`, {
@@ -353,12 +363,12 @@ export const useImport = (): UseImportReturn => {
                 sales_base_id: salesRecord.id,
                 id_contrato: idContrato,
                 numero_fatura: numeroFatura,
-                status_contrato: getValue('status_contrato'),
-                data_cadastro: parseDate(getValue('data_cadastro')),
-                mes_safra_cadastro: getValue('mes_safra_cadastro'),
-                mes_safra_vencimento: getValue('mes_safra_vencimento'),
+                status_contrato: getStringValue('status_contrato'),
+                data_cadastro: parseDate(getStringValue('data_cadastro')),
+                mes_safra_cadastro: getStringValue('mes_safra_cadastro'),
+                mes_safra_vencimento: getStringValue('mes_safra_vencimento'),
                 data_vencimento: dataVencimento,
-                data_pagamento: parseDate(getValue('data_pagamento')),
+                data_pagamento: parseDate(getStringValue('data_pagamento')),
                 valor_fatura: valorFatura,
                 import_batch_id: batchId,
                 raw_data: row,
