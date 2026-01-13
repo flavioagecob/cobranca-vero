@@ -42,43 +42,71 @@ const Import = () => {
   const initializeMappings = useCallback((type: ImportType, headers: string[]) => {
     const fields = type === 'sales' ? SALES_FIELDS : OPERATOR_FIELDS;
     
+    // Sinônimos expandidos para auto-match - inclui colunas comuns das planilhas
+    const synonyms: Record<string, string[]> = {
+      // Campos de vendas
+      cpf_cnpj: ['cpf', 'cnpj', 'documento', 'doc', 'cpf_cnpj', 'cpfcnpj'],
+      nome: ['nome', 'name', 'cliente', 'customer', 'razao', 'razaosocial'],
+      telefone: ['telefone', 'phone', 'tel', 'celular', 'fone', 'telefone1'],
+      telefone2: ['telefone2', 'tel2', 'celular2', 'fone2'],
+      email: ['email', 'e-mail', 'mail', 'emailcliente'],
+      os: ['os', 'ordem', 'order', 'orderservice', 'ordemservico'],
+      // Campos da operadora
+      id_contrato: ['id', 'contrato', 'contract', 'idcontrato', 'id_contrato', 'codigo', 'cod'],
+      numero_fatura: ['fatura', 'numfatura', 'nrofatura', 'nrfatura', 'numerofatura', 'num_fatura', 'numero_fatura', 'nf'],
+      status_contrato: ['status', 'statuscontrato', 'situacao', 'sit'],
+      status_operadora: ['statusoperadora', 'statusop', 'operadora'],
+      data_cadastro: ['datacadastro', 'cadastro', 'dtcadastro'],
+      data_vencimento: ['vencimento', 'datavencimento', 'dtvencimento', 'venc', 'dtvenc'],
+      data_pagamento: ['pagamento', 'datapagamento', 'dtpagamento', 'pago', 'dtpago'],
+      valor_fatura: ['valor', 'valorfatura', 'vlr', 'vlrfatura', 'montante'],
+      mes_safra_cadastro: ['safracadastro', 'messafracadastro', 'safra'],
+      mes_safra_vencimento: ['safravencimento', 'messafravencimento'],
+    };
+    
     // Try to auto-match columns by similar names
     const autoMatch = (targetField: string): string => {
-      const target = targetField.toLowerCase().replace(/_/g, '');
+      const target = targetField.toLowerCase().replace(/[_\s-]/g, '');
       
+      // 1. Match exato (normalizado)
       for (const header of headers) {
-        const h = header.toLowerCase().replace(/[\s_-]/g, '');
-        if (h === target || h.includes(target) || target.includes(h)) {
+        const h = header.toLowerCase().replace(/[_\s-]/g, '');
+        if (h === target) {
           return header;
         }
       }
       
-      // Common mappings
-      const commonMappings: Record<string, string[]> = {
-        cpf_cnpj: ['cpf', 'cnpj', 'documento', 'doc'],
-        nome: ['nome', 'name', 'cliente', 'customer'],
-        telefone: ['telefone', 'phone', 'tel', 'celular', 'fone'],
-        email: ['email', 'e-mail', 'mail'],
-        os: ['os', 'ordem', 'order', 'orderservice'],
-        id_contrato: ['id', 'contrato', 'contract', 'idcontrato'],
-      };
-      
-      const patterns = commonMappings[targetField] || [];
-      for (const pattern of patterns) {
+      // 2. Match por sinônimos
+      const fieldSynonyms = synonyms[targetField] || [];
+      for (const syn of fieldSynonyms) {
         for (const header of headers) {
-          if (header.toLowerCase().includes(pattern)) {
+          const h = header.toLowerCase().replace(/[_\s-]/g, '');
+          if (h === syn || h.includes(syn) || syn.includes(h)) {
             return header;
           }
+        }
+      }
+      
+      // 3. Match parcial (contains)
+      for (const header of headers) {
+        const h = header.toLowerCase().replace(/[_\s-]/g, '');
+        if (h.includes(target) || target.includes(h)) {
+          return header;
         }
       }
       
       return '';
     };
     
-    return fields.map((field) => ({
+    const mappedFields = fields.map((field) => ({
       ...field,
       sourceColumn: autoMatch(field.targetField),
     }));
+    
+    // Log para debug
+    console.log('[Import] Auto-match result:', mappedFields.map(f => `${f.targetField} → "${f.sourceColumn}"`));
+    
+    return mappedFields;
   }, []);
 
   // Handle file selection

@@ -252,12 +252,12 @@ export const useCustomerDetail = (customerId: string | undefined): UseCustomerDe
         .eq('customer_id', customerId)
         .order('data_venda', { ascending: false });
 
-      // Fetch operator contracts - order by due date (most urgent first)
+      // Fetch operator contracts - order by numero_fatura DESC (maior = mais recente)
       const { data: contractsData } = await supabase
         .from('operator_contracts')
         .select('*')
         .eq('customer_id', customerId)
-        .order('data_vencimento', { ascending: true, nullsFirst: false });
+        .order('numero_fatura', { ascending: false });
 
       const customerWithDetails: CustomerWithDetails = {
         ...customerData,

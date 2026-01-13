@@ -297,7 +297,20 @@ export const useImport = (): UseImportReturn => {
               }
 
               // Usa o customer_id encontrado na sales_base
-              const numeroFatura = getValue('numero_fatura') || '1'; // Default para "1"
+              const numeroFaturaRaw = getValue('numero_fatura');
+              const numeroFatura = numeroFaturaRaw || '1'; // Default para "1" apenas se não mapeado
+              
+              // Log detalhado para debug das primeiras linhas
+              if (rowIndex <= 7) {
+                console.log(`[Operadora] Linha ${rowIndex} - FATURA:`, {
+                  numero_fatura_raw: numeroFaturaRaw,
+                  numero_fatura_usado: numeroFatura,
+                  mapeamento_numero_fatura: fieldMap['numero_fatura'] || '(não mapeado)',
+                  colunas_da_linha: Object.keys(row),
+                  valores_linha: row,
+                });
+              }
+              
               const { error: operatorError } = await supabase
                 .from('operator_contracts')
                 .upsert({
