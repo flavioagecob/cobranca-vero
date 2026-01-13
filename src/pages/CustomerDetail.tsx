@@ -314,22 +314,18 @@ export default function CustomerDetail() {
                                 {contract.numero_fatura || '-'}
                               </TableCell>
                               <TableCell>
-                                {contract.status_contrato ? (
-                                  <Badge 
-                                    variant="outline" 
-                                    className={getStatusColor(contract.status_contrato)}
-                                  >
-                                    {contract.status_contrato}
+                                {isPaid ? (
+                                  <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                                    PAGO
                                   </Badge>
-                                ) : contract.status_operadora ? (
-                                  <Badge 
-                                    variant="outline" 
-                                    className={getStatusColor(contract.status_operadora)}
-                                  >
-                                    {contract.status_operadora}
+                                ) : isOverdue ? (
+                                  <Badge variant="destructive">
+                                    VENCIDO
                                   </Badge>
                                 ) : (
-                                  '-'
+                                  <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/20">
+                                    PENDENTE
+                                  </Badge>
                                 )}
                               </TableCell>
                               <TableCell className={isOverdue ? 'font-medium text-destructive' : ''}>

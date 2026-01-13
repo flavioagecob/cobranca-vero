@@ -297,13 +297,14 @@ export const useImport = (): UseImportReturn => {
               }
 
               // Usa o customer_id encontrado na sales_base
+              const numeroFatura = getValue('numero_fatura') || '1'; // Default para "1"
               const { error: operatorError } = await supabase
                 .from('operator_contracts')
                 .upsert({
                   customer_id: salesRecord.customer_id,
                   sales_base_id: salesRecord.id,
                   id_contrato: idContrato,
-                  numero_fatura: getValue('numero_fatura'),
+                  numero_fatura: numeroFatura,
                   status_contrato: getValue('status_contrato'),
                   data_cadastro: parseDate(getValue('data_cadastro')),
                   mes_safra_cadastro: getValue('mes_safra_cadastro'),
@@ -313,7 +314,7 @@ export const useImport = (): UseImportReturn => {
                   valor_fatura: parseCurrency(getValue('valor_fatura')),
                   import_batch_id: batchId,
                   raw_data: row,
-                }, { onConflict: 'id_contrato' });
+                }, { onConflict: 'id_contrato,numero_fatura' });
 
               if (operatorError) {
                 errors.push({ row: rowIndex, message: operatorError.message });

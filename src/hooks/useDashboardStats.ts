@@ -44,7 +44,7 @@ export const useDashboardStats = (): UseDashboardStatsReturn => {
       // Fetch operator contracts stats
       const { data: contractsData, error: contractsError } = await supabase
         .from('operator_contracts')
-        .select('status_contrato, status_operadora, valor_fatura, data_vencimento');
+        .select('status_contrato, status_operadora, valor_fatura, data_vencimento, data_pagamento');
 
       if (contractsError) throw contractsError;
 
@@ -64,23 +64,23 @@ export const useDashboardStats = (): UseDashboardStatsReturn => {
           activeCount++;
         }
 
-        // Check pending invoices (status_contrato = 'pendente' or similar)
-        const statusContrato = (contract.status_contrato || '').toLowerCase();
-        if (statusContrato === 'pendente' || statusContrato === 'pending' || statusContrato === 'aberto') {
+        // Fatura pendente = sem data de pagamento
+        const isPending = contract.data_pagamento === null;
+        if (isPending) {
           pendingCount++;
           pendingValue += contract.valor_fatura || 0;
         }
 
-        // Check overdue
+        // Check overdue (vencido E sem pagamento)
         if (contract.data_vencimento) {
           const dueDate = new Date(contract.data_vencimento);
           dueDate.setHours(0, 0, 0, 0);
           
-          if (dueDate < today && (statusContrato !== 'pago' && statusContrato !== 'paid')) {
+          if (dueDate < today && isPending) {
             overdueCount++;
           }
           
-          if (dueDate.getTime() === today.getTime()) {
+          if (dueDate.getTime() === today.getTime() && isPending) {
             todayDueCount++;
           }
         }
