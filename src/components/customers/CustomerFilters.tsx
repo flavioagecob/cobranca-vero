@@ -14,9 +14,10 @@ import type { CustomerFilters as Filters } from '@/types/customer';
 interface CustomerFiltersProps {
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
+  safraOptions: string[];
 }
 
-export function CustomerFilters({ filters, onFiltersChange }: CustomerFiltersProps) {
+export function CustomerFilters({ filters, onFiltersChange, safraOptions }: CustomerFiltersProps) {
   const handleSearchChange = (value: string) => {
     onFiltersChange({ ...filters, search: value });
   };
@@ -32,11 +33,18 @@ export function CustomerFilters({ filters, onFiltersChange }: CustomerFiltersPro
     });
   };
 
-  const clearFilters = () => {
-    onFiltersChange({ search: '', uf: '', status: 'all' });
+  const handleSafraChange = (value: string) => {
+    onFiltersChange({ 
+      ...filters, 
+      safra: value === 'all' ? '' : value
+    });
   };
 
-  const hasFilters = filters.search || filters.uf || filters.status !== 'all';
+  const clearFilters = () => {
+    onFiltersChange({ search: '', uf: '', status: 'all', safra: '' });
+  };
+
+  const hasFilters = filters.search || filters.uf || filters.status !== 'all' || filters.safra;
 
   return (
     <div className="flex flex-col sm:flex-row gap-3">
@@ -61,6 +69,20 @@ export function CustomerFilters({ filters, onFiltersChange }: CustomerFiltersPro
           <SelectItem value="pending">Fatura Pendente</SelectItem>
           <SelectItem value="overdue">Fatura Vencida</SelectItem>
           <SelectItem value="no_contract">Sem Contrato</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Select value={filters.safra || 'all'} onValueChange={handleSafraChange}>
+        <SelectTrigger className="w-full sm:w-44">
+          <SelectValue placeholder="Safra" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todas Safras</SelectItem>
+          {safraOptions.map((safra) => (
+            <SelectItem key={safra} value={safra}>
+              {safra}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
 

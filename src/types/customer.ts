@@ -68,6 +68,7 @@ export interface CustomerFilters {
   search: string;
   uf: string;
   status: 'all' | 'active' | 'inactive' | 'pending' | 'overdue' | 'no_contract';
+  safra: string;
 }
 
 export interface PaginationState {
