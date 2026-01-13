@@ -39,9 +39,18 @@ export const formatPhone = (value: string | null | undefined): string => {
   return value;
 };
 
-// Date formatter
+// Date formatter - handles ISO dates without timezone offset issues
 export const formatDate = (value: string | null | undefined): string => {
   if (!value) return '-';
+  
+  // If ISO format YYYY-MM-DD, parse directly to avoid timezone issues
+  const isoDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDateMatch) {
+    const [, year, month, day] = isoDateMatch;
+    return `${day}/${month}/${year}`;
+  }
+  
+  // For other formats, use native parser
   const date = new Date(value);
   if (isNaN(date.getTime())) return '-';
   
@@ -79,10 +88,21 @@ export const formatRelativeTime = (value: string | null | undefined): string => 
   return formatDate(value);
 };
 
-// Days overdue calculator
+// Days overdue calculator - handles ISO dates without timezone offset issues
 export const calculateDaysOverdue = (dueDate: string | null | undefined): number => {
   if (!dueDate) return 0;
-  const date = new Date(dueDate);
+  
+  let date: Date;
+  
+  // If ISO format YYYY-MM-DD, parse directly to avoid timezone issues
+  const isoDateMatch = dueDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDateMatch) {
+    const [, year, month, day] = isoDateMatch;
+    date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  } else {
+    date = new Date(dueDate);
+  }
+  
   if (isNaN(date.getTime())) return 0;
   
   const now = new Date();
