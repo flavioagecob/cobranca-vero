@@ -127,39 +127,47 @@ export const useImport = (): UseImportReturn => {
               return sourceCol ? (row[sourceCol] as string) || null : null;
             };
 
-            const cpfCnpj = formatCpfCnpj(getValue('cpf_cnpj'));
-            const nome = getValue('nome');
+            // Para tipo 'sales', precisa criar/atualizar customer
+            // Para tipo 'operator', apenas faz match com sales_base existente
+            let customer: { id: string } | null = null;
 
-            if (!cpfCnpj) {
-              errors.push({ row: rowIndex, field: 'cpf_cnpj', message: 'CPF/CNPJ obrigatório' });
-              continue;
-            }
+            if (type === 'sales') {
+              const cpfCnpj = formatCpfCnpj(getValue('cpf_cnpj'));
+              const nome = getValue('nome');
 
-            if (!nome) {
-              errors.push({ row: rowIndex, field: 'nome', message: 'Nome obrigatório' });
-              continue;
-            }
+              if (!cpfCnpj) {
+                errors.push({ row: rowIndex, field: 'cpf_cnpj', message: 'CPF/CNPJ obrigatório' });
+                continue;
+              }
 
-            // Upsert customer
-            const { data: customer, error: customerError } = await supabase
-              .from('customers')
-              .upsert({
-                cpf_cnpj: cpfCnpj,
-                nome,
-                email: getValue('email'),
-                telefone: getValue('telefone'),
-                telefone2: getValue('telefone2'),
-                endereco: getValue('endereco'),
-                cidade: getValue('cidade'),
-                uf: getValue('uf'),
-                cep: getValue('cep'),
-              }, { onConflict: 'cpf_cnpj' })
-              .select()
-              .single();
+              if (!nome) {
+                errors.push({ row: rowIndex, field: 'nome', message: 'Nome obrigatório' });
+                continue;
+              }
 
-            if (customerError) {
-              errors.push({ row: rowIndex, message: customerError.message });
-              continue;
+              // Upsert customer
+              const { data: customerData, error: customerError } = await supabase
+                .from('customers')
+                .upsert({
+                  cpf_cnpj: cpfCnpj,
+                  nome,
+                  email: getValue('email'),
+                  telefone: getValue('telefone'),
+                  telefone2: getValue('telefone2'),
+                  endereco: getValue('endereco'),
+                  cidade: getValue('cidade'),
+                  uf: getValue('uf'),
+                  cep: getValue('cep'),
+                }, { onConflict: 'cpf_cnpj' })
+                .select()
+                .single();
+
+              if (customerError) {
+                errors.push({ row: rowIndex, message: customerError.message });
+                continue;
+              }
+              
+              customer = customerData;
             }
 
             // Insert type-specific record
@@ -174,7 +182,7 @@ export const useImport = (): UseImportReturn => {
                 .from('sales_base')
                 .insert({
                   customer_id: customer.id,
-                  os,
+                  os: os.replace(/\D/g, ''), // Normaliza para apenas números
                   produto: getValue('produto'),
                   plano: getValue('plano'),
                   valor_plano: parseCurrency(getValue('valor_plano')),
@@ -188,34 +196,67 @@ export const useImport = (): UseImportReturn => {
                 errors.push({ row: rowIndex, message: salesError.message });
                 continue;
               }
+              
+              successCount++;
             } else {
-              const idContrato = getValue('id_contrato');
-              if (!idContrato) {
+              // Tipo 'operator' - faz match pelo id_contrato com sales_base.os
+              const idContratoRaw = getValue('id_contrato');
+              if (!idContratoRaw) {
                 errors.push({ row: rowIndex, field: 'id_contrato', message: 'ID Contrato obrigatório' });
                 continue;
               }
 
+              // Normaliza para apenas números (match com OS)
+              const idContrato = idContratoRaw.replace(/\D/g, '');
+
+              // Busca na sales_base pelo OS que faz match com id_contrato
+              const { data: salesRecord, error: salesQueryError } = await supabase
+                .from('sales_base')
+                .select('id, customer_id')
+                .eq('os', idContrato)
+                .maybeSingle();
+
+              if (salesQueryError) {
+                errors.push({ row: rowIndex, message: salesQueryError.message });
+                continue;
+              }
+
+              if (!salesRecord) {
+                // Contrato não encontrado na base de vendas - registra divergência
+                errors.push({ 
+                  row: rowIndex, 
+                  field: 'id_contrato', 
+                  message: `Contrato ${idContrato} não encontrado na base de vendas` 
+                });
+                continue;
+              }
+
+              // Usa o customer_id encontrado na sales_base
               const { error: operatorError } = await supabase
                 .from('operator_contracts')
-                .insert({
-                  customer_id: customer.id,
+                .upsert({
+                  customer_id: salesRecord.customer_id,
+                  sales_base_id: salesRecord.id,
                   id_contrato: idContrato,
-                  numero_contrato_operadora: getValue('numero_contrato_operadora'),
-                  status_operadora: getValue('status_operadora'),
-                  data_ativacao: parseDate(getValue('data_ativacao')),
-                  data_cancelamento: parseDate(getValue('data_cancelamento')),
-                  valor_contrato: parseCurrency(getValue('valor_contrato')),
+                  numero_fatura: getValue('numero_fatura'),
+                  status_contrato: getValue('status_contrato'),
+                  data_cadastro: parseDate(getValue('data_cadastro')),
+                  mes_safra_cadastro: getValue('mes_safra_cadastro'),
+                  mes_safra_vencimento: getValue('mes_safra_vencimento'),
+                  data_vencimento: parseDate(getValue('data_vencimento')),
+                  data_pagamento: parseDate(getValue('data_pagamento')),
+                  valor_fatura: parseCurrency(getValue('valor_fatura')),
                   import_batch_id: batchId,
                   raw_data: row,
-                });
+                }, { onConflict: 'id_contrato' });
 
               if (operatorError) {
                 errors.push({ row: rowIndex, message: operatorError.message });
                 continue;
               }
+              
+              successCount++;
             }
-
-            successCount++;
           } catch (err) {
             errors.push({
               row: rowIndex,
