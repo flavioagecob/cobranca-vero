@@ -14,6 +14,7 @@ export default function Customers() {
     error,
     pagination,
     filters,
+    safraOptions,
     setFilters,
     setPage,
   } = useCustomers(20);
@@ -82,7 +83,7 @@ export default function Customers() {
       </div>
 
       {/* Filters */}
-      <CustomerFilters filters={filters} onFiltersChange={setFilters} />
+      <CustomerFilters filters={filters} onFiltersChange={setFilters} safraOptions={safraOptions} />
 
       {/* Error State */}
       {error && (

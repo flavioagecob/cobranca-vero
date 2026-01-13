@@ -16,6 +16,7 @@ export default function Invoices() {
     pagination,
     filters,
     stats,
+    safraOptions,
     setFilters,
     setPage,
     updateInvoiceStatus,
@@ -56,7 +57,7 @@ export default function Invoices() {
       <InvoiceStatsCards stats={stats} isLoading={isLoading} />
 
       {/* Filters */}
-      <InvoiceFilters filters={filters} onFiltersChange={setFilters} />
+      <InvoiceFilters filters={filters} onFiltersChange={setFilters} safraOptions={safraOptions} />
 
       {/* Error State */}
       {error && (

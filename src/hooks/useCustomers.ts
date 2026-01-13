@@ -8,6 +8,7 @@ interface UseCustomersReturn {
   error: string | null;
   pagination: PaginationState;
   filters: CustomerFilters;
+  safraOptions: string[];
   setFilters: (filters: CustomerFilters) => void;
   setPage: (page: number) => void;
   refetch: () => void;
@@ -33,14 +34,46 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
     search: '',
     uf: '',
     status: 'all',
+    safra: '',
   });
+  const [safraOptions, setSafraOptions] = useState<string[]>([]);
 
   const fetchCustomers = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // First, get customer IDs that match the status filter if needed
+      // Fetch unique safras for filter options
+      const { data: safrasData } = await supabase
+        .from('operator_contracts')
+        .select('mes_safra_cadastro')
+        .not('mes_safra_cadastro', 'is', null);
+
+      if (safrasData) {
+        const uniqueSafras = [...new Set(safrasData.map(s => s.mes_safra_cadastro).filter(Boolean))] as string[];
+        setSafraOptions(uniqueSafras.sort());
+      }
+
+      // First, get customer IDs that match the safra filter if needed
+      let customerIdsWithSafra: string[] | null = null;
+      
+      if (filters.safra) {
+        const { data: contractsWithSafra } = await supabase
+          .from('operator_contracts')
+          .select('customer_id')
+          .eq('mes_safra_cadastro', filters.safra);
+        
+        customerIdsWithSafra = [...new Set((contractsWithSafra || []).map(c => c.customer_id))];
+        
+        if (customerIdsWithSafra.length === 0) {
+          setCustomers([]);
+          setPagination((prev) => ({ ...prev, total: 0 }));
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Get customer IDs that match the status filter if needed
       let customerIdsWithStatus: string[] | null = null;
       
       if (filters.status !== 'all') {
@@ -92,9 +125,26 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         .from('customers')
         .select('*', { count: 'exact' });
 
+      // Apply safra filter (customer IDs)
+      if (customerIdsWithSafra) {
+        query = query.in('id', customerIdsWithSafra);
+      }
+
       // Apply status filter (customer IDs)
       if (customerIdsWithStatus) {
-        query = query.in('id', customerIdsWithStatus);
+        // If both filters are active, intersect the IDs
+        if (customerIdsWithSafra) {
+          const intersection = customerIdsWithStatus.filter(id => customerIdsWithSafra!.includes(id));
+          if (intersection.length === 0) {
+            setCustomers([]);
+            setPagination((prev) => ({ ...prev, total: 0 }));
+            setIsLoading(false);
+            return;
+          }
+          query = query.in('id', intersection);
+        } else {
+          query = query.in('id', customerIdsWithStatus);
+        }
       }
 
       // Apply search filter
@@ -209,6 +259,7 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
     error,
     pagination,
     filters,
+    safraOptions,
     setFilters: handleSetFilters,
     setPage,
     refetch: fetchCustomers,

@@ -10,6 +10,7 @@ interface UseInvoicesReturn {
   pagination: PaginationState;
   filters: InvoiceFilters;
   stats: InvoiceStats;
+  safraOptions: string[];
   setFilters: (filters: InvoiceFilters) => void;
   setPage: (page: number) => void;
   refetch: () => void;
@@ -49,7 +50,9 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     overdueRange: 'all',
     dateFrom: '',
     dateTo: '',
+    safra: 'all',
   });
+  const [safraOptions, setSafraOptions] = useState<string[]>([]);
   const [stats, setStats] = useState<InvoiceStats>({
     total: 0,
     pendente: 0,
@@ -87,6 +90,11 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
       }
       if (filters.dateTo) {
         query = query.lte('data_vencimento', filters.dateTo);
+      }
+
+      // Apply safra filter
+      if (filters.safra && filters.safra !== 'all') {
+        query = query.eq('mes_safra_cadastro', filters.safra);
       }
 
       // Apply pagination
@@ -164,6 +172,17 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
 
       setInvoices(processedInvoices);
       setPagination((prev) => ({ ...prev, total: count || 0 }));
+
+      // Fetch unique safras for filter options
+      const { data: safrasData } = await supabase
+        .from('operator_contracts')
+        .select('mes_safra_cadastro')
+        .not('mes_safra_cadastro', 'is', null);
+
+      if (safrasData) {
+        const uniqueSafras = [...new Set(safrasData.map(s => s.mes_safra_cadastro).filter(Boolean))] as string[];
+        setSafraOptions(uniqueSafras.sort());
+      }
 
       // Fetch all contracts for stats calculation
       const { data: statsData } = await supabase
@@ -243,6 +262,7 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     pagination,
     filters,
     stats,
+    safraOptions,
     setFilters,
     setPage,
     refetch: fetchInvoices,

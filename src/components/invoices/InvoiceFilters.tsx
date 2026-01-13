@@ -22,9 +22,10 @@ import type { InvoiceFilters as Filters } from '@/types/invoice';
 interface InvoiceFiltersProps {
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
+  safraOptions: string[];
 }
 
-export function InvoiceFilters({ filters, onFiltersChange }: InvoiceFiltersProps) {
+export function InvoiceFilters({ filters, onFiltersChange, safraOptions }: InvoiceFiltersProps) {
   const handleSearchChange = (value: string) => {
     onFiltersChange({ ...filters, search: value });
   };
@@ -40,6 +41,13 @@ export function InvoiceFilters({ filters, onFiltersChange }: InvoiceFiltersProps
     onFiltersChange({ 
       ...filters, 
       overdueRange: value as Filters['overdueRange']
+    });
+  };
+
+  const handleSafraChange = (value: string) => {
+    onFiltersChange({ 
+      ...filters, 
+      safra: value
     });
   };
 
@@ -63,11 +71,12 @@ export function InvoiceFilters({ filters, onFiltersChange }: InvoiceFiltersProps
       status: 'all', 
       overdueRange: 'all',
       dateFrom: '',
-      dateTo: ''
+      dateTo: '',
+      safra: 'all'
     });
   };
 
-  const hasFilters = filters.search || filters.status !== 'all' || filters.overdueRange !== 'all' || filters.dateFrom || filters.dateTo;
+  const hasFilters = filters.search || filters.status !== 'all' || filters.overdueRange !== 'all' || filters.dateFrom || filters.dateTo || filters.safra !== 'all';
 
   return (
     <div className="space-y-3">
@@ -109,6 +118,21 @@ export function InvoiceFilters({ filters, onFiltersChange }: InvoiceFiltersProps
             <SelectItem value="16-30">16-30 dias</SelectItem>
             <SelectItem value="31-60">31-60 dias</SelectItem>
             <SelectItem value="60+">60+ dias</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Safra Filter */}
+        <Select value={filters.safra} onValueChange={handleSafraChange}>
+          <SelectTrigger className="w-full sm:w-44">
+            <SelectValue placeholder="Safra" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas Safras</SelectItem>
+            {safraOptions.map((safra) => (
+              <SelectItem key={safra} value={safra}>
+                {safra}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
