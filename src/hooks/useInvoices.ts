@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Invoice, InvoiceFilters, InvoiceStats, InvoiceStatus } from '@/types/invoice';
 import type { PaginationState } from '@/types/customer';
@@ -24,6 +24,14 @@ const calculateDaysOverdue = (dueDate: string): number => {
   now.setHours(0, 0, 0, 0);
   const diff = now.getTime() - due.getTime();
   return Math.floor(diff / (1000 * 60 * 60 * 24));
+};
+
+// Calculate status based on payment date and due date
+const calculateStatus = (dataPagamento: string | null, dataVencimento: string): InvoiceStatus => {
+  if (dataPagamento) return 'pago';
+  const daysOverdue = calculateDaysOverdue(dataVencimento);
+  if (daysOverdue > 0) return 'atrasado';
+  return 'pendente';
 };
 
 export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => {
@@ -57,18 +65,21 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     setError(null);
 
     try {
-      // Build query
+      // Build query from operator_contracts table
       let query = supabase
-        .from('invoices')
+        .from('operator_contracts')
         .select(`
-          *,
+          id,
+          customer_id,
+          id_contrato,
+          numero_fatura,
+          valor_fatura,
+          data_vencimento,
+          data_pagamento,
+          created_at,
+          updated_at,
           customer:customers(id, nome, cpf_cnpj, telefone, email)
         `, { count: 'exact' });
-
-      // Apply status filter
-      if (filters.status !== 'all') {
-        query = query.eq('status', filters.status);
-      }
 
       // Apply date range filter
       if (filters.dateFrom) {
@@ -90,11 +101,38 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
 
       if (queryError) throw queryError;
 
-      // Process invoices - calculate days overdue and filter by search/overdue range
-      let processedInvoices = (data || []).map((inv) => ({
-        ...inv,
-        dias_atraso: inv.status !== 'pago' ? calculateDaysOverdue(inv.data_vencimento) : 0,
-      }));
+      // Process invoices - map fields and calculate status
+      let processedInvoices: Invoice[] = (data || []).map((contract) => {
+        const status = calculateStatus(contract.data_pagamento, contract.data_vencimento);
+        const diasAtraso = status !== 'pago' ? calculateDaysOverdue(contract.data_vencimento) : 0;
+        
+        // Handle customer data - Supabase returns array for joins, get first item
+        const customerData = Array.isArray(contract.customer) 
+          ? contract.customer[0] 
+          : contract.customer;
+        
+        return {
+          id: contract.id,
+          customer_id: contract.customer_id,
+          sales_base_id: null,
+          operator_contract_id: contract.id_contrato,
+          numero_fatura: contract.numero_fatura,
+          valor: contract.valor_fatura,
+          data_vencimento: contract.data_vencimento,
+          data_pagamento: contract.data_pagamento,
+          status,
+          dias_atraso: diasAtraso,
+          observacoes: null,
+          created_at: contract.created_at,
+          updated_at: contract.updated_at,
+          customer: customerData,
+        };
+      });
+
+      // Apply status filter (client-side since status is calculated)
+      if (filters.status !== 'all') {
+        processedInvoices = processedInvoices.filter((inv) => inv.status === filters.status);
+      }
 
       // Apply search filter (client-side for joined data)
       if (filters.search) {
@@ -126,24 +164,29 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
       setInvoices(processedInvoices);
       setPagination((prev) => ({ ...prev, total: count || 0 }));
 
-      // Fetch stats
+      // Fetch all contracts for stats calculation
       const { data: statsData } = await supabase
-        .from('invoices')
-        .select('status, valor');
+        .from('operator_contracts')
+        .select('valor_fatura, data_vencimento, data_pagamento');
 
       if (statsData) {
+        const contractsWithStatus = statsData.map((c) => ({
+          ...c,
+          status: calculateStatus(c.data_pagamento, c.data_vencimento),
+        }));
+
         const calculatedStats: InvoiceStats = {
-          total: statsData.length,
-          pendente: statsData.filter((i) => i.status === 'pendente').length,
-          pago: statsData.filter((i) => i.status === 'pago').length,
-          atrasado: statsData.filter((i) => i.status === 'atrasado').length,
-          valorTotal: statsData.reduce((sum, i) => sum + (i.valor || 0), 0),
-          valorPendente: statsData
+          total: contractsWithStatus.length,
+          pendente: contractsWithStatus.filter((i) => i.status === 'pendente').length,
+          pago: contractsWithStatus.filter((i) => i.status === 'pago').length,
+          atrasado: contractsWithStatus.filter((i) => i.status === 'atrasado').length,
+          valorTotal: contractsWithStatus.reduce((sum, i) => sum + (i.valor_fatura || 0), 0),
+          valorPendente: contractsWithStatus
             .filter((i) => i.status === 'pendente' || i.status === 'atrasado')
-            .reduce((sum, i) => sum + (i.valor || 0), 0),
-          valorAtrasado: statsData
+            .reduce((sum, i) => sum + (i.valor_fatura || 0), 0),
+          valorAtrasado: contractsWithStatus
             .filter((i) => i.status === 'atrasado')
-            .reduce((sum, i) => sum + (i.valor || 0), 0),
+            .reduce((sum, i) => sum + (i.valor_fatura || 0), 0),
         };
         setStats(calculatedStats);
       }
@@ -169,17 +212,26 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
   }, []);
 
   const updateInvoiceStatus = useCallback(async (id: string, status: InvoiceStatus) => {
-    const updateData: Record<string, unknown> = { status };
+    // Update the operator_contracts table
+    const updateData: Record<string, unknown> = {};
+    
     if (status === 'pago') {
       updateData.data_pagamento = new Date().toISOString().split('T')[0];
+    } else if (status === 'pendente' || status === 'atrasado') {
+      updateData.data_pagamento = null;
     }
+    // Note: 'negociado' and 'cancelado' would need a status field in operator_contracts
+    // For now, we only handle payment status changes
 
-    const { error } = await supabase
-      .from('invoices')
-      .update(updateData)
-      .eq('id', id);
+    if (Object.keys(updateData).length > 0) {
+      const { error } = await supabase
+        .from('operator_contracts')
+        .update(updateData)
+        .eq('id', id);
 
-    if (error) throw error;
+      if (error) throw error;
+    }
+    
     await fetchInvoices();
   }, [fetchInvoices]);
 
