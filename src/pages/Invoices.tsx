@@ -1,30 +1,79 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText } from "lucide-react";
+import { useInvoices } from '@/hooks/useInvoices';
+import { InvoiceFilters } from '@/components/invoices/InvoiceFilters';
+import { InvoiceTable } from '@/components/invoices/InvoiceTable';
+import { InvoicePagination } from '@/components/invoices/InvoicePagination';
+import { InvoiceStatsCards } from '@/components/invoices/InvoiceStatsCards';
+import { Button } from '@/components/ui/button';
+import { Download, Plus } from 'lucide-react';
+import { toast } from 'sonner';
+import type { InvoiceStatus } from '@/types/invoice';
 
 export default function Invoices() {
+  const {
+    invoices,
+    isLoading,
+    error,
+    pagination,
+    filters,
+    stats,
+    setFilters,
+    setPage,
+    updateInvoiceStatus,
+  } = useInvoices(20);
+
+  const handleStatusChange = async (id: string, status: InvoiceStatus) => {
+    try {
+      await updateInvoiceStatus(id, status);
+      toast.success(`Fatura marcada como ${status}`);
+    } catch (err) {
+      toast.error('Erro ao atualizar status da fatura');
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Faturas</h1>
-        <p className="text-muted-foreground">
-          Controle de faturas e inadimplência
-        </p>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Faturas</h1>
+          <p className="text-muted-foreground">
+            Controle de faturas e inadimplência
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-2" />
+            Exportar
+          </Button>
+          <Button size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Fatura
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Lista de Faturas
-          </CardTitle>
-          <CardDescription>
-            Esta página será implementada na Fase 3
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Em desenvolvimento...</p>
-        </CardContent>
-      </Card>
+      {/* Stats Cards */}
+      <InvoiceStatsCards stats={stats} isLoading={isLoading} />
+
+      {/* Filters */}
+      <InvoiceFilters filters={filters} onFiltersChange={setFilters} />
+
+      {/* Error State */}
+      {error && (
+        <div className="rounded-md bg-destructive/10 p-4 text-destructive text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Table */}
+      <InvoiceTable 
+        invoices={invoices} 
+        isLoading={isLoading} 
+        onStatusChange={handleStatusChange}
+      />
+
+      {/* Pagination */}
+      <InvoicePagination pagination={pagination} onPageChange={setPage} />
     </div>
   );
 }
