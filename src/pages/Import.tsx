@@ -140,7 +140,7 @@ const Import = () => {
     setStep('importing');
     
     // Re-parse to get all rows (not just preview)
-    const fullParse = await parseFile(selectedFile);
+    const fullParse = await parseFile(selectedFile, true);
     if (!fullParse) {
       setStep('mapping');
       return;

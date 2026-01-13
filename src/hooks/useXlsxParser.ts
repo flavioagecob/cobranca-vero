@@ -5,7 +5,7 @@ import type { ImportPreview, ParsedRow } from '@/types/import';
 interface UseXlsxParserReturn {
   isLoading: boolean;
   error: string | null;
-  parseFile: (file: File) => Promise<ImportPreview | null>;
+  parseFile: (file: File, fullData?: boolean) => Promise<ImportPreview | null>;
   reset: () => void;
 }
 
@@ -13,7 +13,7 @@ export const useXlsxParser = (): UseXlsxParserReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const parseFile = useCallback(async (file: File): Promise<ImportPreview | null> => {
+  const parseFile = useCallback(async (file: File, fullData: boolean = false): Promise<ImportPreview | null> => {
     setIsLoading(true);
     setError(null);
 
@@ -69,7 +69,7 @@ export const useXlsxParser = (): UseXlsxParserReturn => {
 
       return {
         headers,
-        rows: rows.slice(0, 100), // Preview first 100 rows
+        rows: fullData ? rows : rows.slice(0, 100), // Full data or preview (100 rows)
         totalRows: rows.length,
       };
     } catch (err) {
