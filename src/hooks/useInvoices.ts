@@ -76,6 +76,7 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
           valor_fatura,
           data_vencimento,
           data_pagamento,
+          mes_safra_cadastro,
           created_at,
           customer:customers(id, nome, cpf_cnpj, telefone, email)
         `, { count: 'exact' });
@@ -121,6 +122,7 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
           data_pagamento: contract.data_pagamento,
           status,
           dias_atraso: diasAtraso,
+          mes_safra_cadastro: contract.mes_safra_cadastro,
           observacoes: null,
           created_at: contract.created_at,
           updated_at: contract.created_at,

@@ -38,21 +38,23 @@ export function InvoiceTable({ invoices, isLoading, onStatusChange }: InvoiceTab
       <div className="rounded-md border">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Fatura</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Valor</TableHead>
-              <TableHead>Vencimento</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Dias Atraso</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
-            </TableRow>
+          <TableRow>
+            <TableHead>Fatura</TableHead>
+            <TableHead>Cliente</TableHead>
+            <TableHead>Safra</TableHead>
+            <TableHead>Valor</TableHead>
+            <TableHead>Vencimento</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Dias Atraso</TableHead>
+            <TableHead className="text-right">Ações</TableHead>
+          </TableRow>
           </TableHeader>
           <TableBody>
             {Array.from({ length: 10 }).map((_, i) => (
               <TableRow key={i}>
                 <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                 <TableCell><Skeleton className="h-6 w-20" /></TableCell>
@@ -92,6 +94,7 @@ export function InvoiceTable({ invoices, isLoading, onStatusChange }: InvoiceTab
           <TableRow>
             <TableHead>Fatura</TableHead>
             <TableHead>Cliente</TableHead>
+            <TableHead>Safra</TableHead>
             <TableHead>Valor</TableHead>
             <TableHead>Vencimento</TableHead>
             <TableHead>Status</TableHead>
@@ -127,6 +130,9 @@ export function InvoiceTable({ invoices, isLoading, onStatusChange }: InvoiceTab
                   ) : (
                     <span className="text-muted-foreground">-</span>
                   )}
+                </TableCell>
+                <TableCell>
+                  <span className="text-sm">{invoice.mes_safra_cadastro || '-'}</span>
                 </TableCell>
                 <TableCell className="font-medium">
                   {formatCurrency(invoice.valor)}
