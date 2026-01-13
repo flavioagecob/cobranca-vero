@@ -207,7 +207,20 @@ export const useImport = (): UseImportReturn => {
               }
 
               // Normaliza para apenas números (match com OS)
-              const idContrato = idContratoRaw.replace(/\D/g, '');
+              let idContrato = idContratoRaw.replace(/\D/g, '');
+              
+              // Se parece notação científica, converte
+              if (/^[\d.]+[eE][+-]?\d+$/.test(idContratoRaw.trim())) {
+                const num = parseFloat(idContratoRaw);
+                if (!isNaN(num) && isFinite(num)) {
+                  idContrato = Math.round(num).toString();
+                }
+              }
+
+              // Log das primeiras linhas para debug
+              if (rowIndex <= 7) {
+                console.log(`[Operadora] Linha ${rowIndex}: CONTRATO raw="${idContratoRaw}" → normalizado="${idContrato}"`);
+              }
 
               // Estratégia 1: Match exato
               let salesRecord: { id: string; customer_id: string; os: string } | null = null;
@@ -253,8 +266,17 @@ export const useImport = (): UseImportReturn => {
               }
 
               if (!salesRecord) {
-                // Log diagnóstico
-                console.warn(`[Operadora] Linha ${rowIndex}: Não encontrou match para CONTRATO=${idContrato} (raw="${idContratoRaw}")`);
+                // Log diagnóstico para primeiros erros
+                if (errors.length < 10) {
+                  // Busca exemplos de OS existentes para diagnóstico
+                  const { data: sampleOS } = await supabase
+                    .from('sales_base')
+                    .select('os')
+                    .not('os', 'is', null)
+                    .limit(3);
+                  
+                  console.warn(`[Operadora] Linha ${rowIndex}: Não encontrou match para CONTRATO="${idContrato}" (raw="${idContratoRaw}"). Exemplos de OS na base:`, sampleOS?.map(s => s.os));
+                }
                 
                 errors.push({ 
                   row: rowIndex, 

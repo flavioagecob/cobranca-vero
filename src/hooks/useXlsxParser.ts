@@ -54,7 +54,12 @@ export const useXlsxParser = (): UseXlsxParserReturn => {
         
         // Handle numbers - convert to string without scientific notation
         if (typeof value === 'number') {
-          // Check if it's an integer (likely an ID/contract number)
+          if (!isFinite(value)) return null;
+          // Para números grandes (provavelmente IDs/contratos), arredonda para evitar precisão de float
+          if (Math.abs(value) >= 1000000) {
+            return Math.round(value).toString();
+          }
+          // Check if it's an integer
           if (Number.isInteger(value)) {
             return String(value);
           }
@@ -66,13 +71,16 @@ export const useXlsxParser = (): UseXlsxParserReturn => {
         const strValue = String(value).trim();
         if (/^[\d.]+[eE][+-]?\d+$/.test(strValue)) {
           const num = parseFloat(strValue);
-          if (!isNaN(num) && Number.isInteger(num)) {
-            return String(Math.round(num));
+          if (!isNaN(num) && isFinite(num)) {
+            return Math.round(num).toString();
           }
         }
         
         return strValue;
       };
+
+      // Log de debug para verificar parsing
+      console.log('[XLSX Parser] Primeira linha raw (antes de formatar):', jsonData[1]);
 
       // Parse data rows
       const rows: ParsedRow[] = [];
