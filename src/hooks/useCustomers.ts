@@ -71,8 +71,7 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
           } else if (filters.status === 'overdue') {
             contractQuery = contractQuery
               .lt('data_vencimento', today)
-              .not('status_contrato', 'ilike', 'pago')
-              .not('status_contrato', 'ilike', 'paid');
+              .is('data_pagamento', null); // Fatura não paga = sem data de pagamento
           }
           
           const { data: contractsData } = await contractQuery;
@@ -134,7 +133,7 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
       if (customerIds.length > 0) {
         const { data: contractsData } = await supabase
           .from('operator_contracts')
-          .select('customer_id, status_contrato, status_operadora, valor_fatura, data_vencimento')
+          .select('customer_id, status_contrato, status_operadora, valor_fatura, data_vencimento, data_pagamento')
           .in('customer_id', customerIds);
 
         // Aggregate data per customer
@@ -151,10 +150,10 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
 
           operatorSummary[customerId].contracts_count++;
 
-          // Sum pending values
-          const statusContrato = (contract.status_contrato || '').toLowerCase();
-          if (statusContrato === 'pendente' || statusContrato === 'pending' || statusContrato === 'aberto') {
-            operatorSummary[customerId].total_valor_pendente += contract.valor_fatura || 0;
+          // Sum pending values (fatura sem data de pagamento = pendente)
+          const isPending = contract.data_pagamento === null;
+          if (isPending && contract.valor_fatura) {
+            operatorSummary[customerId].total_valor_pendente += contract.valor_fatura;
           }
 
           // Get latest status (just use the first one found)

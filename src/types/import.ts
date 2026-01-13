@@ -55,7 +55,7 @@ export const SALES_FIELDS: ColumnMapping[] = [
 
 export const OPERATOR_FIELDS: ColumnMapping[] = [
   { sourceColumn: '', targetField: 'id_contrato', required: true },
-  { sourceColumn: '', targetField: 'numero_fatura', required: false },
+  { sourceColumn: '', targetField: 'numero_fatura', required: true },
   { sourceColumn: '', targetField: 'status_contrato', required: false },
   { sourceColumn: '', targetField: 'data_cadastro', required: false },
   { sourceColumn: '', targetField: 'mes_safra_cadastro', required: false },
