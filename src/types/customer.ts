@@ -76,3 +76,12 @@ export interface PaginationState {
   pageSize: number;
   total: number;
 }
+
+// Sorting types
+export type CustomerSortField = 'nome' | 'cpf_cnpj' | 'contracts_count' | 'total_valor_pendente' | 'proxima_data_vencimento';
+export type SortDirection = 'asc' | 'desc';
+
+export interface CustomerSortState {
+  field: CustomerSortField;
+  direction: SortDirection;
+}

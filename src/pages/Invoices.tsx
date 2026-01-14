@@ -17,9 +17,11 @@ export default function Invoices() {
     filters,
     stats,
     safraOptions,
+    sortState,
     setFilters,
     setPage,
     updateInvoiceStatus,
+    toggleSort,
   } = useInvoices(20);
 
   const handleStatusChange = async (id: string, status: InvoiceStatus) => {
@@ -71,6 +73,8 @@ export default function Invoices() {
         invoices={invoices} 
         isLoading={isLoading} 
         onStatusChange={handleStatusChange}
+        sortState={sortState}
+        onSort={toggleSort}
       />
 
       {/* Pagination */}

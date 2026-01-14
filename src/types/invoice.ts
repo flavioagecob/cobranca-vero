@@ -1,5 +1,14 @@
 export type InvoiceStatus = 'pendente' | 'pago' | 'atrasado' | 'negociado' | 'cancelado';
 
+// Sorting types
+export type InvoiceSortField = 'numero_fatura' | 'customer_name' | 'mes_safra_cadastro' | 'valor' | 'data_vencimento' | 'dias_atraso';
+export type SortDirection = 'asc' | 'desc';
+
+export interface InvoiceSortState {
+  field: InvoiceSortField;
+  direction: SortDirection;
+}
+
 export interface Invoice {
   id: string;
   customer_id: string;
