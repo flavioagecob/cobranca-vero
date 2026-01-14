@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { Invoice, InvoiceFilters, InvoiceStats, InvoiceStatus } from '@/types/invoice';
+import type { Invoice, InvoiceFilters, InvoiceStats, InvoiceStatus, InvoiceSortField, InvoiceSortState } from '@/types/invoice';
 import type { PaginationState } from '@/types/customer';
 
 interface UseInvoicesReturn {
@@ -11,10 +11,12 @@ interface UseInvoicesReturn {
   filters: InvoiceFilters;
   stats: InvoiceStats;
   safraOptions: string[];
+  sortState: InvoiceSortState;
   setFilters: (filters: InvoiceFilters) => void;
   setPage: (page: number) => void;
   refetch: () => void;
   updateInvoiceStatus: (id: string, status: InvoiceStatus) => Promise<void>;
+  toggleSort: (field: InvoiceSortField) => void;
 }
 
 // Calculate days overdue
@@ -53,6 +55,10 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     safra: 'all',
   });
   const [safraOptions, setSafraOptions] = useState<string[]>([]);
+  const [sortState, setSortState] = useState<InvoiceSortState>({
+    field: 'data_vencimento',
+    direction: 'asc',
+  });
   const [stats, setStats] = useState<InvoiceStats>({
     total: 0,
     pendente: 0,
@@ -170,6 +176,28 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
         });
       }
 
+      // Apply sorting (client-side)
+      processedInvoices.sort((a, b) => {
+        const multiplier = sortState.direction === 'asc' ? 1 : -1;
+
+        switch (sortState.field) {
+          case 'numero_fatura':
+            return multiplier * (a.numero_fatura || '').localeCompare(b.numero_fatura || '');
+          case 'customer_name':
+            return multiplier * (a.customer?.nome || '').localeCompare(b.customer?.nome || '');
+          case 'mes_safra_cadastro':
+            return multiplier * (a.mes_safra_cadastro || '').localeCompare(b.mes_safra_cadastro || '');
+          case 'valor':
+            return multiplier * ((a.valor || 0) - (b.valor || 0));
+          case 'data_vencimento':
+            return multiplier * (a.data_vencimento || '').localeCompare(b.data_vencimento || '');
+          case 'dias_atraso':
+            return multiplier * ((a.dias_atraso || 0) - (b.dias_atraso || 0));
+          default:
+            return 0;
+        }
+      });
+
       setInvoices(processedInvoices);
       setPagination((prev) => ({ ...prev, total: count || 0 }));
 
@@ -216,7 +244,7 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     } finally {
       setIsLoading(false);
     }
-  }, [filters, pagination.page, pagination.pageSize]);
+  }, [filters, pagination.page, pagination.pageSize, sortState]);
 
   useEffect(() => {
     fetchInvoices();
@@ -229,6 +257,13 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
   const setFilters = useCallback((newFilters: InvoiceFilters) => {
     setFiltersState(newFilters);
     setPagination((prev) => ({ ...prev, page: 1 }));
+  }, []);
+
+  const toggleSort = useCallback((field: InvoiceSortField) => {
+    setSortState((prev) => ({
+      field,
+      direction: prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
   }, []);
 
   const updateInvoiceStatus = useCallback(async (id: string, status: InvoiceStatus) => {
@@ -263,9 +298,11 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     filters,
     stats,
     safraOptions,
+    sortState,
     setFilters,
     setPage,
     refetch: fetchInvoices,
     updateInvoiceStatus,
+    toggleSort,
   };
 };

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { Customer, CustomerWithDetails, CustomerWithOperatorSummary, CustomerFilters, PaginationState } from '@/types/customer';
+import type { Customer, CustomerWithDetails, CustomerWithOperatorSummary, CustomerFilters, PaginationState, CustomerSortField, CustomerSortState } from '@/types/customer';
 
 interface UseCustomersReturn {
   customers: CustomerWithOperatorSummary[];
@@ -9,9 +9,11 @@ interface UseCustomersReturn {
   pagination: PaginationState;
   filters: CustomerFilters;
   safraOptions: string[];
+  sortState: CustomerSortState;
   setFilters: (filters: CustomerFilters) => void;
   setPage: (page: number) => void;
   refetch: () => void;
+  toggleSort: (field: CustomerSortField) => void;
 }
 
 interface UseCustomerDetailReturn {
@@ -37,6 +39,10 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
     safra: '',
   });
   const [safraOptions, setSafraOptions] = useState<string[]>([]);
+  const [sortState, setSortState] = useState<CustomerSortState>({
+    field: 'nome',
+    direction: 'asc',
+  });
 
   const fetchCustomers = useCallback(async () => {
     setIsLoading(true);
@@ -162,9 +168,14 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
       const from = (pagination.page - 1) * pagination.pageSize;
       const to = from + pagination.pageSize - 1;
 
-      query = query
-        .order('nome', { ascending: true })
-        .range(from, to);
+      // Apply Supabase-level sorting for direct fields
+      if (['nome', 'cpf_cnpj'].includes(sortState.field)) {
+        query = query.order(sortState.field, { ascending: sortState.direction === 'asc' });
+      } else {
+        query = query.order('nome', { ascending: true }); // fallback
+      }
+
+      query = query.range(from, to);
 
       const { data: customersData, error: queryError, count } = await query;
 
@@ -222,13 +233,30 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
       }
 
       // Merge customers with operator summary
-      const customersWithSummary: CustomerWithOperatorSummary[] = (customersData || []).map((customer) => ({
+      let customersWithSummary: CustomerWithOperatorSummary[] = (customersData || []).map((customer) => ({
         ...customer,
         contracts_count: operatorSummary[customer.id]?.contracts_count || 0,
         total_valor_pendente: operatorSummary[customer.id]?.total_valor_pendente || 0,
         status_contrato: operatorSummary[customer.id]?.status_contrato || null,
         proxima_data_vencimento: operatorSummary[customer.id]?.proxima_data_vencimento || null,
       }));
+
+      // Apply client-side sorting for aggregated fields
+      if (!['nome', 'cpf_cnpj'].includes(sortState.field)) {
+        const multiplier = sortState.direction === 'asc' ? 1 : -1;
+        customersWithSummary.sort((a, b) => {
+          switch (sortState.field) {
+            case 'contracts_count':
+              return multiplier * (a.contracts_count - b.contracts_count);
+            case 'total_valor_pendente':
+              return multiplier * (a.total_valor_pendente - b.total_valor_pendente);
+            case 'proxima_data_vencimento':
+              return multiplier * (a.proxima_data_vencimento || '').localeCompare(b.proxima_data_vencimento || '');
+            default:
+              return 0;
+          }
+        });
+      }
 
       setCustomers(customersWithSummary);
       setPagination((prev) => ({ ...prev, total: count || 0 }));
@@ -238,7 +266,7 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
     } finally {
       setIsLoading(false);
     }
-  }, [filters, pagination.page, pagination.pageSize]);
+  }, [filters, pagination.page, pagination.pageSize, sortState]);
 
   useEffect(() => {
     fetchCustomers();
@@ -253,6 +281,13 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
     setPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page
   }, []);
 
+  const toggleSort = useCallback((field: CustomerSortField) => {
+    setSortState((prev) => ({
+      field,
+      direction: prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  }, []);
+
   return {
     customers,
     isLoading,
@@ -260,9 +295,11 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
     pagination,
     filters,
     safraOptions,
+    sortState,
     setFilters: handleSetFilters,
     setPage,
     refetch: fetchCustomers,
+    toggleSort,
   };
 };
 

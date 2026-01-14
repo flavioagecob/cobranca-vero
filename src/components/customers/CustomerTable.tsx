@@ -11,15 +11,22 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SortableHeader } from '@/components/ui/sortable-header';
 import { formatCpfCnpj, formatPhone, formatCurrency, formatDate, getStatusColor, calculateDaysOverdue } from '@/lib/formatters';
-import type { CustomerWithOperatorSummary } from '@/types/customer';
+import type { CustomerWithOperatorSummary, CustomerSortField, CustomerSortState } from '@/types/customer';
 
 interface CustomerTableProps {
   customers: CustomerWithOperatorSummary[];
   isLoading: boolean;
+  sortState: CustomerSortState;
+  onSort: (field: CustomerSortField) => void;
 }
 
-export function CustomerTable({ customers, isLoading }: CustomerTableProps) {
+export function CustomerTable({ customers, isLoading, sortState, onSort }: CustomerTableProps) {
+  const handleSort = (field: string) => {
+    onSort(field as CustomerSortField);
+  };
+
   if (isLoading) {
     return (
       <div className="rounded-md border">
@@ -121,12 +128,50 @@ export function CustomerTable({ customers, isLoading }: CustomerTableProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Nome</TableHead>
-            <TableHead>CPF/CNPJ</TableHead>
+            <SortableHeader
+              field="nome"
+              currentField={sortState.field}
+              direction={sortState.direction}
+              onSort={handleSort}
+            >
+              Nome
+            </SortableHeader>
+            <SortableHeader
+              field="cpf_cnpj"
+              currentField={sortState.field}
+              direction={sortState.direction}
+              onSort={handleSort}
+            >
+              CPF/CNPJ
+            </SortableHeader>
             <TableHead className="hidden md:table-cell">Contato</TableHead>
-            <TableHead className="hidden lg:table-cell">Contratos</TableHead>
-            <TableHead className="hidden lg:table-cell">Valor Pendente</TableHead>
-            <TableHead className="hidden xl:table-cell">Próx. Vencimento</TableHead>
+            <SortableHeader
+              field="contracts_count"
+              currentField={sortState.field}
+              direction={sortState.direction}
+              onSort={handleSort}
+              className="hidden lg:table-cell"
+            >
+              Contratos
+            </SortableHeader>
+            <SortableHeader
+              field="total_valor_pendente"
+              currentField={sortState.field}
+              direction={sortState.direction}
+              onSort={handleSort}
+              className="hidden lg:table-cell"
+            >
+              Valor Pendente
+            </SortableHeader>
+            <SortableHeader
+              field="proxima_data_vencimento"
+              currentField={sortState.field}
+              direction={sortState.direction}
+              onSort={handleSort}
+              className="hidden xl:table-cell"
+            >
+              Próx. Vencimento
+            </SortableHeader>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>

@@ -18,21 +18,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { SortableHeader } from '@/components/ui/sortable-header';
 import { formatCpfCnpj, formatCurrency, formatDate } from '@/lib/formatters';
 import { 
   INVOICE_STATUS_CONFIG, 
   getOverdueBadgeClass,
   type Invoice,
-  type InvoiceStatus 
+  type InvoiceStatus,
+  type InvoiceSortField,
+  type InvoiceSortState,
 } from '@/types/invoice';
 
 interface InvoiceTableProps {
   invoices: Invoice[];
   isLoading: boolean;
   onStatusChange: (id: string, status: InvoiceStatus) => void;
+  sortState: InvoiceSortState;
+  onSort: (field: InvoiceSortField) => void;
 }
 
-export function InvoiceTable({ invoices, isLoading, onStatusChange }: InvoiceTableProps) {
+export function InvoiceTable({ invoices, isLoading, onStatusChange, sortState, onSort }: InvoiceTableProps) {
+  const handleSort = (field: string) => {
+    onSort(field as InvoiceSortField);
+  };
+
   if (isLoading) {
     return (
       <div className="rounded-md border">
@@ -92,13 +101,55 @@ export function InvoiceTable({ invoices, isLoading, onStatusChange }: InvoiceTab
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Fatura</TableHead>
-            <TableHead>Cliente</TableHead>
-            <TableHead>Safra</TableHead>
-            <TableHead>Valor</TableHead>
-            <TableHead>Vencimento</TableHead>
+            <SortableHeader
+              field="numero_fatura"
+              currentField={sortState.field}
+              direction={sortState.direction}
+              onSort={handleSort}
+            >
+              Fatura
+            </SortableHeader>
+            <SortableHeader
+              field="customer_name"
+              currentField={sortState.field}
+              direction={sortState.direction}
+              onSort={handleSort}
+            >
+              Cliente
+            </SortableHeader>
+            <SortableHeader
+              field="mes_safra_cadastro"
+              currentField={sortState.field}
+              direction={sortState.direction}
+              onSort={handleSort}
+            >
+              Safra
+            </SortableHeader>
+            <SortableHeader
+              field="valor"
+              currentField={sortState.field}
+              direction={sortState.direction}
+              onSort={handleSort}
+            >
+              Valor
+            </SortableHeader>
+            <SortableHeader
+              field="data_vencimento"
+              currentField={sortState.field}
+              direction={sortState.direction}
+              onSort={handleSort}
+            >
+              Vencimento
+            </SortableHeader>
             <TableHead>Status</TableHead>
-            <TableHead>Dias Atraso</TableHead>
+            <SortableHeader
+              field="dias_atraso"
+              currentField={sortState.field}
+              direction={sortState.direction}
+              onSort={handleSort}
+            >
+              Dias Atraso
+            </SortableHeader>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>

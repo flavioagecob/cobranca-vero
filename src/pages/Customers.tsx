@@ -15,8 +15,10 @@ export default function Customers() {
     pagination,
     filters,
     safraOptions,
+    sortState,
     setFilters,
     setPage,
+    toggleSort,
   } = useCustomers(20);
 
   return (
@@ -93,7 +95,12 @@ export default function Customers() {
       )}
 
       {/* Table */}
-      <CustomerTable customers={customers} isLoading={isLoading} />
+      <CustomerTable 
+        customers={customers} 
+        isLoading={isLoading} 
+        sortState={sortState}
+        onSort={toggleSort}
+      />
 
       {/* Pagination */}
       <CustomerPagination pagination={pagination} onPageChange={setPage} />
