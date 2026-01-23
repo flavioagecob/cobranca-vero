@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, RefreshCw, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCollection } from '@/hooks/useCollection';
 import { CollectionQueue } from '@/components/collection/CollectionQueue';
 import { CustomerInfoCard } from '@/components/collection/CustomerInfoCard';
@@ -18,6 +19,10 @@ export default function Collection() {
     promises,
     isLoading,
     error,
+    filters,
+    safraOptions,
+    parcelaOptions,
+    setFilters,
     selectCustomer,
     registerAttempt,
     registerPromise,
@@ -72,12 +77,42 @@ export default function Collection() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Workstation de Cobrança</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Cobrança</h1>
           <p className="text-muted-foreground">
-            Interface operacional para cobradores
+            Fila de clientes com faturas vencidas
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Select 
+            value={filters.safra} 
+            onValueChange={(v) => setFilters({ ...filters, safra: v })}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Safra: Todas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Safra: Todas</SelectItem>
+              {safraOptions.map((s) => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <Select 
+            value={filters.parcela} 
+            onValueChange={(v) => setFilters({ ...filters, parcela: v })}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Parcela: Todas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Parcela: Todas</SelectItem>
+              {parcelaOptions.map((p) => (
+                <SelectItem key={p} value={p}>{p}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Button variant="outline" size="sm" onClick={refreshQueue}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Atualizar
@@ -143,7 +178,9 @@ export default function Collection() {
                   ) : (
                     <MessageTemplates
                       customerName={selectedCustomer.customer_name}
+                      customerCpf={selectedCustomer.customer_cpf_cnpj}
                       valorPendente={selectedCustomer.total_pendente}
+                      diasAtraso={selectedCustomer.max_dias_atraso}
                     />
                   )}
                 </div>
@@ -168,9 +205,13 @@ export default function Collection() {
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <Phone className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium">Nenhum cliente selecionado</h3>
+              <h3 className="text-lg font-medium">
+                {isLoading ? 'Carregando...' : 'Nenhum cliente com fatura vencida'}
+              </h3>
               <p className="text-muted-foreground mt-1">
-                Selecione um cliente na fila para iniciar a cobrança
+                {isLoading 
+                  ? 'Buscando clientes com faturas vencidas...' 
+                  : 'Todos os clientes estão em dia ou não há faturas para os filtros selecionados'}
               </p>
             </div>
           )}
