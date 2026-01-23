@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Eye, Phone, Mail, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Eye, Phone, Mail, FileX, CheckCircle, AlertTriangle } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -78,10 +78,10 @@ export function CustomerTable({ customers, isLoading, sortState, onSort }: Custo
     switch (situacao) {
       case 'paid':
         return <CheckCircle className="h-3.5 w-3.5" />;
-      case 'pending':
-        return <Clock className="h-3.5 w-3.5" />;
       case 'overdue':
         return <AlertTriangle className="h-3.5 w-3.5" />;
+      case 'no_contract':
+        return <FileX className="h-3.5 w-3.5" />;
     }
   };
 
@@ -89,10 +89,10 @@ export function CustomerTable({ customers, isLoading, sortState, onSort }: Custo
     switch (situacao) {
       case 'paid':
         return 'bg-emerald-500/5 hover:bg-emerald-500/10';
-      case 'pending':
-        return 'bg-amber-500/5 hover:bg-amber-500/10';
       case 'overdue':
         return 'bg-destructive/5 hover:bg-destructive/10';
+      case 'no_contract':
+        return 'bg-muted/30 hover:bg-muted/50';
       default:
         return '';
     }

@@ -84,16 +84,16 @@ export function CustomerFilters({
               Em Dia
             </span>
           </SelectItem>
-          <SelectItem value="pending">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-500" />
-              Pendentes
-            </span>
-          </SelectItem>
           <SelectItem value="overdue">
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-destructive" />
               Em Atraso
+            </span>
+          </SelectItem>
+          <SelectItem value="no_contract">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-muted-foreground" />
+              Sem Contrato
             </span>
           </SelectItem>
         </SelectContent>

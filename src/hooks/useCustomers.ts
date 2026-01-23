@@ -37,12 +37,11 @@ interface UseCustomerDetailReturn {
 // Calculate customer situação based on invoices
 const calculateSituacao = (
   hasContracts: boolean,
-  hasUnpaidInvoices: boolean,
   hasOverdueInvoices: boolean
 ): CustomerSituacao => {
-  if (!hasContracts || !hasUnpaidInvoices) return 'paid';
+  if (!hasContracts) return 'no_contract';
   if (hasOverdueInvoices) return 'overdue';
-  return 'pending';
+  return 'paid';
 };
 
 export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn => {
@@ -66,8 +65,8 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
   const [stats, setStats] = useState<CustomerStats>({
     total: 0,
     paid: 0,
-    pending: 0,
     overdue: 0,
+    noContract: 0,
   });
   const [sortState, setSortState] = useState<CustomerSortState>({
     field: 'nome',
@@ -112,13 +111,12 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
       const customerSituacaoMap: Record<string, CustomerSituacao> = {};
       Object.entries(contractsByCustomer).forEach(([customerId, contracts]) => {
         const hasContracts = contracts!.length > 0;
-        const hasUnpaidInvoices = contracts!.some(c => c.data_pagamento === null);
         const hasOverdueInvoices = contracts!.some(c => {
           if (c.data_pagamento !== null) return false;
           if (!c.data_vencimento) return false;
           return c.data_vencimento < todayStr;
         });
-        customerSituacaoMap[customerId] = calculateSituacao(hasContracts, hasUnpaidInvoices, hasOverdueInvoices);
+        customerSituacaoMap[customerId] = calculateSituacao(hasContracts, hasOverdueInvoices);
       });
 
       // First, get customer IDs that match the safra filter if needed
@@ -132,7 +130,7 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         if (customerIdsWithSafra.length === 0) {
           setCustomers([]);
           setPagination((prev) => ({ ...prev, total: 0 }));
-          setStats({ total: 0, paid: 0, pending: 0, overdue: 0 });
+          setStats({ total: 0, paid: 0, overdue: 0, noContract: 0 });
           setIsLoading(false);
           return;
         }
@@ -149,7 +147,7 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         if (customerIdsWithStatusContrato.length === 0) {
           setCustomers([]);
           setPagination((prev) => ({ ...prev, total: 0 }));
-          setStats({ total: 0, paid: 0, pending: 0, overdue: 0 });
+          setStats({ total: 0, paid: 0, overdue: 0, noContract: 0 });
           setIsLoading(false);
           return;
         }
@@ -157,21 +155,24 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
 
       // Get customer IDs that match the situação filter if needed
       let customerIdsWithSituacao: string[] | null = null;
+      let filteringNoContract = false;
       
       if (filters.status !== 'all') {
-        customerIdsWithSituacao = Object.entries(customerSituacaoMap)
-          .filter(([_, situacao]) => situacao === filters.status)
-          .map(([customerId]) => customerId);
-        
-        // For 'paid' status, also include customers without contracts
-        if (filters.status === 'paid') {
-          // Will add these after fetching all customers
-        } else if (customerIdsWithSituacao.length === 0) {
-          setCustomers([]);
-          setPagination((prev) => ({ ...prev, total: 0 }));
-          setStats({ total: 0, paid: 0, pending: 0, overdue: 0 });
-          setIsLoading(false);
-          return;
+        if (filters.status === 'no_contract') {
+          filteringNoContract = true;
+          // Will filter after fetching all customers
+        } else {
+          customerIdsWithSituacao = Object.entries(customerSituacaoMap)
+            .filter(([_, situacao]) => situacao === filters.status)
+            .map(([customerId]) => customerId);
+          
+          if (customerIdsWithSituacao.length === 0) {
+            setCustomers([]);
+            setPagination((prev) => ({ ...prev, total: 0 }));
+            setStats({ total: 0, paid: 0, overdue: 0, noContract: 0 });
+            setIsLoading(false);
+            return;
+          }
         }
       }
 
@@ -195,7 +196,7 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         }
       }
       
-      if (customerIdsWithSituacao && filters.status !== 'paid') {
+      if (customerIdsWithSituacao) {
         if (combinedIds) {
           combinedIds = combinedIds.filter(id => customerIdsWithSituacao!.includes(id));
         } else {
@@ -206,7 +207,7 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
       if (combinedIds && combinedIds.length === 0) {
         setCustomers([]);
         setPagination((prev) => ({ ...prev, total: 0 }));
-        setStats({ total: 0, paid: 0, pending: 0, overdue: 0 });
+        setStats({ total: 0, paid: 0, overdue: 0, noContract: 0 });
         setIsLoading(false);
         return;
       }
@@ -287,12 +288,13 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
             }
           });
 
+          const situacao = customerSituacaoMap[customerId] || 'no_contract';
           operatorSummary[customerId] = {
             contracts_count: contractsCount,
             total_valor_pendente: totalValorPendente,
             status_contrato: statusContrato,
             proxima_data_vencimento: proximaDataVencimento,
-            situacao: customerSituacaoMap[customerId] || 'paid',
+            situacao,
           };
         });
       }
@@ -304,12 +306,12 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         total_valor_pendente: operatorSummary[customer.id]?.total_valor_pendente || 0,
         status_contrato: operatorSummary[customer.id]?.status_contrato || null,
         proxima_data_vencimento: operatorSummary[customer.id]?.proxima_data_vencimento || null,
-        situacao: operatorSummary[customer.id]?.situacao || 'paid',
+        situacao: operatorSummary[customer.id]?.situacao || 'no_contract',
       }));
 
-      // Apply situação filter for 'paid' (includes customers without contracts)
-      if (filters.status === 'paid') {
-        customersWithSummary = customersWithSummary.filter(c => c.situacao === 'paid');
+      // Apply situação filter for 'no_contract' (customers without contracts)
+      if (filteringNoContract) {
+        customersWithSummary = customersWithSummary.filter(c => c.situacao === 'no_contract');
       }
 
       // Apply client-side sorting for aggregated fields
@@ -335,23 +337,21 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         .select('*', { count: 'exact', head: true });
 
       const customersWithContracts = new Set(Object.keys(contractsByCustomer));
-      const customersWithoutContracts = (totalCustomers || 0) - customersWithContracts.size;
+      const noContractCount = (totalCustomers || 0) - customersWithContracts.size;
 
-      let paidCount = customersWithoutContracts; // Customers without contracts are "paid"
-      let pendingCount = 0;
+      let paidCount = 0;
       let overdueCount = 0;
 
       Object.values(customerSituacaoMap).forEach(situacao => {
         if (situacao === 'paid') paidCount++;
-        else if (situacao === 'pending') pendingCount++;
         else if (situacao === 'overdue') overdueCount++;
       });
 
       setStats({
         total: totalCustomers || 0,
         paid: paidCount,
-        pending: pendingCount,
         overdue: overdueCount,
+        noContract: noContractCount,
       });
 
       setCustomers(customersWithSummary);
