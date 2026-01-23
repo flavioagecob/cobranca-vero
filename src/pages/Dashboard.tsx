@@ -2,13 +2,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { 
   Users, 
   FileText, 
-  Phone, 
-  AlertTriangle, 
   TrendingUp, 
   Upload,
-  ArrowUpRight,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  AlertTriangle,
+  CalendarClock,
+  CalendarDays
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -27,7 +27,7 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Main Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -51,7 +51,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Faturas Pendentes</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <Clock className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -62,7 +62,7 @@ export default function Dashboard() {
                   {formatCurrency(stats.pendingInvoicesValue)}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {stats.pendingInvoicesCount} faturas aguardando pagamento
+                  {stats.pendingInvoicesCount} faturas aguardando
                 </p>
               </>
             )}
@@ -71,18 +71,19 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Contratos Ativos</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Faturas Pagas</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <Skeleton className="h-8 w-16" />
+              <Skeleton className="h-8 w-28" />
             ) : (
               <>
-                <div className="text-2xl font-bold text-emerald-600">{stats.activeContracts}</div>
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <ArrowUpRight className="h-3 w-3 text-emerald-500" />
-                  contratos com status ativo
+                <div className="text-2xl font-bold text-emerald-600">
+                  {formatCurrency(stats.paidInvoicesValue)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {stats.paidInvoicesCount} faturas quitadas
                 </p>
               </>
             )}
@@ -91,18 +92,77 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Vencidos</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Contratos Habilitados</CardTitle>
+            <FileText className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <Skeleton className="h-8 w-16" />
             ) : (
               <>
-                <div className="text-2xl font-bold text-destructive">{stats.overdueContracts}</div>
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {stats.todayDueContracts} vencem hoje
+                <div className="text-2xl font-bold text-blue-600">{stats.enabledContracts}</div>
+                <p className="text-xs text-muted-foreground">
+                  contratos ativos
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Due Date Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-destructive/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-destructive">Vencidos</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-10 w-16" />
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-destructive">{stats.overdueCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  {formatCurrency(stats.overdueValue)} em atraso
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-amber-500/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-amber-600">Vencem Hoje</CardTitle>
+            <CalendarClock className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-10 w-16" />
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-amber-600">{stats.todayDueCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  {formatCurrency(stats.todayDueValue)} a vencer
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-blue-500/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-blue-600">Próximos 7 Dias</CardTitle>
+            <CalendarDays className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-10 w-16" />
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-blue-600">{stats.next7DaysCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  {formatCurrency(stats.next7DaysValue)} a vencer
                 </p>
               </>
             )}
@@ -174,30 +234,27 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Vencimentos Hoje</CardTitle>
-            <CardDescription>Contratos que vencem hoje</CardDescription>
+            <CardTitle className="text-base">Contratos por Status</CardTitle>
+            <CardDescription>Distribuição de contratos</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <Skeleton className="h-20 w-full" />
-            ) : stats.todayDueContracts > 0 ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-amber-600">{stats.todayDueContracts}</div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    contratos para cobrar
-                  </p>
-                  <Link 
-                    to="/customers?status=overdue" 
-                    className="text-sm text-primary hover:underline mt-2 inline-block"
-                  >
-                    Ver clientes →
-                  </Link>
-                </div>
+            ) : Object.keys(stats.contractsByStatus).length > 0 ? (
+              <div className="space-y-2">
+                {Object.entries(stats.contractsByStatus)
+                  .sort(([, a], [, b]) => b - a)
+                  .slice(0, 5)
+                  .map(([status, count]) => (
+                    <div key={status} className="flex items-center justify-between text-sm">
+                      <span className="capitalize text-muted-foreground">{status}</span>
+                      <span className="font-medium">{count}</span>
+                    </div>
+                  ))}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-8">
-                Nenhum vencimento para hoje
+                Nenhum contrato encontrado
               </p>
             )}
           </CardContent>
