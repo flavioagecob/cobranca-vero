@@ -78,7 +78,7 @@ export interface CustomerStats {
 
 export interface CustomerFilters {
   search: string;
-  uf: string;
+  parcela: string;
   status: 'all' | 'paid' | 'overdue' | 'no_contract';
   safra: string;
   statusContrato: string;
