@@ -1,4 +1,4 @@
-import { Phone, MessageCircle, Mail, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Phone, MessageCircle, Mail, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -29,7 +29,7 @@ export function HistoryTimeline({ attempts, promises }: HistoryTimelineProps) {
     ...attempts.map((a) => ({
       id: a.id,
       type: 'attempt' as const,
-      date: a.data_tentativa,
+      date: a.created_at,
       data: a,
     })),
     ...promises.map((p) => ({
@@ -39,15 +39,6 @@ export function HistoryTimeline({ attempts, promises }: HistoryTimelineProps) {
       data: p,
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  const getChannelIcon = (canal: string) => {
-    switch (canal) {
-      case 'telefone': return <Phone className="h-4 w-4 text-blue-600" />;
-      case 'whatsapp': return <MessageCircle className="h-4 w-4 text-emerald-600" />;
-      case 'email': return <Mail className="h-4 w-4 text-amber-600" />;
-      default: return <Phone className="h-4 w-4" />;
-    }
-  };
 
   if (timeline.length === 0) {
     return (
@@ -94,30 +85,30 @@ export function HistoryTimeline({ attempts, promises }: HistoryTimelineProps) {
 }
 
 function AttemptItem({ attempt }: { attempt: CollectionAttempt }) {
-  const channelConfig = CHANNEL_CONFIG[attempt.canal];
-  const resultConfig = RESULT_CONFIG[attempt.resultado];
+  const channelConfig = CHANNEL_CONFIG[attempt.channel];
+  const resultConfig = RESULT_CONFIG[attempt.status];
 
   return (
     <div className="flex gap-3">
       <div className="flex-shrink-0 w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-        {attempt.canal === 'telefone' && <Phone className="h-4 w-4 text-blue-600" />}
-        {attempt.canal === 'whatsapp' && <MessageCircle className="h-4 w-4 text-emerald-600" />}
-        {attempt.canal === 'email' && <Mail className="h-4 w-4 text-amber-600" />}
-        {!['telefone', 'whatsapp', 'email'].includes(attempt.canal) && <Phone className="h-4 w-4" />}
+        {attempt.channel === 'telefone' && <Phone className="h-4 w-4 text-blue-600" />}
+        {attempt.channel === 'whatsapp' && <MessageCircle className="h-4 w-4 text-emerald-600" />}
+        {attempt.channel === 'email' && <Mail className="h-4 w-4 text-amber-600" />}
+        {!['telefone', 'whatsapp', 'email'].includes(attempt.channel) && <Phone className="h-4 w-4" />}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium">{channelConfig?.label || attempt.canal}</span>
+          <span className="text-sm font-medium">{channelConfig?.label || attempt.channel}</span>
           <span className="text-xs text-muted-foreground">
-            {formatDateTime(attempt.data_tentativa)}
+            {formatDateTime(attempt.created_at)}
           </span>
         </div>
         <Badge variant="outline" className={`mt-1 ${resultConfig?.color || ''}`}>
-          {resultConfig?.label || attempt.resultado}
+          {resultConfig?.label || attempt.status}
         </Badge>
-        {attempt.observacoes && (
+        {attempt.notes && (
           <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-            {attempt.observacoes}
+            {attempt.notes}
           </p>
         )}
       </div>
@@ -126,7 +117,7 @@ function AttemptItem({ attempt }: { attempt: CollectionAttempt }) {
 }
 
 function PromiseItem({ promise }: { promise: PaymentPromise }) {
-  const statusConfig = PROMISE_STATUS_CONFIG[promise.status];
+  const statusConfig = promise.status ? PROMISE_STATUS_CONFIG[promise.status] : null;
 
   return (
     <div className="flex gap-3">
@@ -144,18 +135,15 @@ function PromiseItem({ promise }: { promise: PaymentPromise }) {
           <span className="text-sm font-semibold">
             {formatCurrency(promise.valor_prometido)}
           </span>
-          <Badge variant="outline" className={statusConfig?.color || ''}>
-            {statusConfig?.label || promise.status}
-          </Badge>
+          {statusConfig && (
+            <Badge variant="outline" className={statusConfig.color}>
+              {statusConfig.label}
+            </Badge>
+          )}
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          Previsão: {new Date(promise.data_pagamento_previsto).toLocaleDateString('pt-BR')}
+          Previsão: {new Date(promise.data_prometida).toLocaleDateString('pt-BR')}
         </p>
-        {promise.observacoes && (
-          <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-            {promise.observacoes}
-          </p>
-        )}
       </div>
     </div>
   );

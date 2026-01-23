@@ -35,21 +35,19 @@ interface UseCollectionReturn {
   previousCustomer: () => void;
 }
 
+// Aligned with Supabase table structure
 interface NewAttempt {
   customer_id: string;
-  invoice_id?: string;
-  canal: AttemptChannel;
-  resultado: AttemptResult;
-  observacoes?: string;
+  invoice_id: string;
+  channel: AttemptChannel;
+  status: AttemptResult;
+  notes?: string;
 }
 
 interface NewPromise {
-  customer_id: string;
-  invoice_id?: string;
-  attempt_id?: string;
+  invoice_id: string;
   valor_prometido: number;
-  data_pagamento_previsto: string;
-  observacoes?: string;
+  data_prometida: string;
 }
 
 // LocalStorage keys for fallback
@@ -176,6 +174,7 @@ export const useCollection = (): UseCollectionReturn => {
             ultima_tentativa: null,
             ultima_promessa: null,
             priority_score: diasAtraso,
+            first_invoice_id: contract.id, // Store first invoice for attempts
           });
         }
       });
@@ -207,14 +206,14 @@ export const useCollection = (): UseCollectionReturn => {
         .from('collection_attempts')
         .select('*')
         .eq('customer_id', customerId)
-        .order('data_tentativa', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(20);
 
       if (error) {
         // Fallback to localStorage
         const localAttempts = getLocalStorageData<CollectionAttempt>(LS_ATTEMPTS_KEY)
           .filter(a => a.customer_id === customerId)
-          .sort((a, b) => new Date(b.data_tentativa).getTime() - new Date(a.data_tentativa).getTime());
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         setAttempts(localAttempts);
         return;
       }
@@ -229,21 +228,34 @@ export const useCollection = (): UseCollectionReturn => {
     }
   }, []);
 
-  // Fetch promises for selected customer (with localStorage fallback)
+  // Fetch promises for selected customer via invoice_ids (with localStorage fallback)
   const fetchPromises = useCallback(async (customerId: string) => {
     try {
+      // First get all invoice_ids for this customer
+      const { data: contracts } = await supabase
+        .from('operator_contracts')
+        .select('id')
+        .eq('customer_id', customerId);
+
+      const invoiceIds = contracts?.map(c => c.id) || [];
+
+      if (invoiceIds.length === 0) {
+        setPromises([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('payment_promises')
         .select('*')
-        .eq('customer_id', customerId)
-        .order('data_pagamento_previsto', { ascending: false })
+        .in('invoice_id', invoiceIds)
+        .order('data_prometida', { ascending: false })
         .limit(20);
 
       if (error) {
         // Fallback to localStorage
         const localPromises = getLocalStorageData<PaymentPromise>(LS_PROMISES_KEY)
-          .filter(p => p.customer_id === customerId)
-          .sort((a, b) => new Date(b.data_pagamento_previsto).getTime() - new Date(a.data_pagamento_previsto).getTime());
+          .filter(p => invoiceIds.includes(p.invoice_id))
+          .sort((a, b) => new Date(b.data_prometida).getTime() - new Date(a.data_prometida).getTime());
         setPromises(localPromises);
         return;
       }
@@ -251,10 +263,7 @@ export const useCollection = (): UseCollectionReturn => {
       setPromises(data || []);
     } catch (err) {
       console.error('Error fetching promises:', err);
-      // Fallback to localStorage
-      const localPromises = getLocalStorageData<PaymentPromise>(LS_PROMISES_KEY)
-        .filter(p => p.customer_id === customerId);
-      setPromises(localPromises);
+      setPromises([]);
     }
   }, []);
 
@@ -299,12 +308,11 @@ export const useCollection = (): UseCollectionReturn => {
     const newAttempt: CollectionAttempt = {
       id: crypto.randomUUID(),
       customer_id: data.customer_id,
-      invoice_id: data.invoice_id || null,
-      user_id: user.id,
-      canal: data.canal,
-      resultado: data.resultado,
-      observacoes: data.observacoes || null,
-      data_tentativa: new Date().toISOString(),
+      invoice_id: data.invoice_id,
+      collector_id: user.id,
+      channel: data.channel,
+      status: data.status,
+      notes: data.notes || null,
       created_at: new Date().toISOString(),
     };
 
@@ -314,12 +322,14 @@ export const useCollection = (): UseCollectionReturn => {
         .insert(newAttempt);
 
       if (error) {
+        console.error('Supabase insert error:', error);
         // Fallback to localStorage
         const localAttempts = getLocalStorageData<CollectionAttempt>(LS_ATTEMPTS_KEY);
         localAttempts.push(newAttempt);
         setLocalStorageData(LS_ATTEMPTS_KEY, localAttempts);
       }
-    } catch {
+    } catch (err) {
+      console.error('Error registering attempt:', err);
       // Fallback to localStorage
       const localAttempts = getLocalStorageData<CollectionAttempt>(LS_ATTEMPTS_KEY);
       localAttempts.push(newAttempt);
@@ -335,17 +345,12 @@ export const useCollection = (): UseCollectionReturn => {
 
     const newPromise: PaymentPromise = {
       id: crypto.randomUUID(),
-      customer_id: data.customer_id,
-      invoice_id: data.invoice_id || null,
-      attempt_id: data.attempt_id || null,
-      user_id: user.id,
+      invoice_id: data.invoice_id,
+      collector_id: user.id,
       valor_prometido: data.valor_prometido,
-      data_promessa: new Date().toISOString().split('T')[0],
-      data_pagamento_previsto: data.data_pagamento_previsto,
+      data_prometida: data.data_prometida,
       status: 'pendente',
-      observacoes: data.observacoes || null,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     };
 
     try {
@@ -354,46 +359,50 @@ export const useCollection = (): UseCollectionReturn => {
         .insert(newPromise);
 
       if (error) {
+        console.error('Supabase insert error:', error);
         // Fallback to localStorage
         const localPromises = getLocalStorageData<PaymentPromise>(LS_PROMISES_KEY);
         localPromises.push(newPromise);
         setLocalStorageData(LS_PROMISES_KEY, localPromises);
       }
-    } catch {
+    } catch (err) {
+      console.error('Error registering promise:', err);
       // Fallback to localStorage
       const localPromises = getLocalStorageData<PaymentPromise>(LS_PROMISES_KEY);
       localPromises.push(newPromise);
       setLocalStorageData(LS_PROMISES_KEY, localPromises);
     }
 
-    // Refresh promises
-    await fetchPromises(data.customer_id);
-  }, [user, fetchPromises]);
+    // Refresh promises if we have the customer
+    if (selectedCustomer) {
+      await fetchPromises(selectedCustomer.customer_id);
+    }
+  }, [user, selectedCustomer, fetchPromises]);
 
   const updatePromiseStatus = useCallback(async (id: string, status: PromiseStatus) => {
     try {
       const { error } = await supabase
         .from('payment_promises')
-        .update({ status, updated_at: new Date().toISOString() })
+        .update({ status })
         .eq('id', id);
 
       if (error) {
+        console.error('Error updating promise status:', error);
         // Fallback to localStorage
         const localPromises = getLocalStorageData<PaymentPromise>(LS_PROMISES_KEY);
         const idx = localPromises.findIndex(p => p.id === id);
         if (idx !== -1) {
           localPromises[idx].status = status;
-          localPromises[idx].updated_at = new Date().toISOString();
           setLocalStorageData(LS_PROMISES_KEY, localPromises);
         }
       }
-    } catch {
+    } catch (err) {
+      console.error('Error updating promise:', err);
       // Fallback to localStorage
       const localPromises = getLocalStorageData<PaymentPromise>(LS_PROMISES_KEY);
       const idx = localPromises.findIndex(p => p.id === id);
       if (idx !== -1) {
         localPromises[idx].status = status;
-        localPromises[idx].updated_at = new Date().toISOString();
         setLocalStorageData(LS_PROMISES_KEY, localPromises);
       }
     }

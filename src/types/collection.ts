@@ -2,46 +2,26 @@ export type AttemptChannel = 'telefone' | 'whatsapp' | 'email' | 'sms' | 'presen
 export type AttemptResult = 'contato_efetivo' | 'sem_contato' | 'numero_invalido' | 'caixa_postal' | 'recado' | 'ocupado';
 export type PromiseStatus = 'pendente' | 'cumprida' | 'quebrada' | 'cancelada';
 
+// Interfaces aligned with Supabase table structure
 export interface CollectionAttempt {
   id: string;
   customer_id: string;
-  invoice_id: string | null;
-  user_id: string;
-  canal: AttemptChannel;
-  resultado: AttemptResult;
-  observacoes: string | null;
-  data_tentativa: string;
+  invoice_id: string;
+  collector_id: string;
+  channel: AttemptChannel;
+  status: AttemptResult;
+  notes: string | null;
   created_at: string;
-  // Joined
-  customer?: {
-    id: string;
-    nome: string;
-    cpf_cnpj: string;
-  };
-  user?: {
-    full_name: string;
-  };
 }
 
 export interface PaymentPromise {
   id: string;
-  customer_id: string;
-  invoice_id: string | null;
-  attempt_id: string | null;
-  user_id: string;
+  invoice_id: string;
+  collector_id: string;
   valor_prometido: number;
-  data_promessa: string;
-  data_pagamento_previsto: string;
-  status: PromiseStatus;
-  observacoes: string | null;
+  data_prometida: string;
+  status: PromiseStatus | null;
   created_at: string;
-  updated_at: string;
-  // Joined
-  customer?: {
-    id: string;
-    nome: string;
-    cpf_cnpj: string;
-  };
 }
 
 export interface CollectionQueueItem {
@@ -57,6 +37,8 @@ export interface CollectionQueueItem {
   ultima_tentativa: string | null;
   ultima_promessa: string | null;
   priority_score: number;
+  // Store first overdue invoice for attempts/promises
+  first_invoice_id?: string;
 }
 
 export interface MessageTemplate {

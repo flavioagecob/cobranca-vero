@@ -37,15 +37,15 @@ interface AttemptFormProps {
   isLoading?: boolean;
 }
 
+// Form data uses internal naming that gets mapped to Supabase fields
 export interface AttemptFormData {
-  canal: AttemptChannel;
-  resultado: AttemptResult;
-  observacoes: string;
+  channel: AttemptChannel;
+  status: AttemptResult;
+  notes: string;
   createPromise: boolean;
   promiseData?: {
     valor_prometido: number;
-    data_pagamento_previsto: string;
-    observacoes: string;
+    data_prometida: string;
   };
 }
 
@@ -56,29 +56,27 @@ export function AttemptForm({
   onCancel,
   isLoading 
 }: AttemptFormProps) {
-  const [canal, setCanal] = useState<AttemptChannel>(initialChannel);
-  const [resultado, setResultado] = useState<AttemptResult>('contato_efetivo');
-  const [observacoes, setObservacoes] = useState('');
+  const [channel, setChannel] = useState<AttemptChannel>(initialChannel);
+  const [status, setStatus] = useState<AttemptResult>('contato_efetivo');
+  const [notes, setNotes] = useState('');
   const [createPromise, setCreatePromise] = useState(false);
   const [valorPrometido, setValorPrometido] = useState('');
   const [dataPromessa, setDataPromessa] = useState<Date | undefined>();
-  const [obsPromessa, setObsPromessa] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const data: AttemptFormData = {
-      canal,
-      resultado,
-      observacoes,
+      channel,
+      status,
+      notes,
       createPromise,
     };
 
     if (createPromise && dataPromessa) {
       data.promiseData = {
         valor_prometido: parseFloat(valorPrometido.replace(/\D/g, '')) / 100 || 0,
-        data_pagamento_previsto: format(dataPromessa, 'yyyy-MM-dd'),
-        observacoes: obsPromessa,
+        data_prometida: format(dataPromessa, 'yyyy-MM-dd'),
       };
     }
 
@@ -101,7 +99,7 @@ export function AttemptForm({
           {/* Canal */}
           <div className="space-y-2">
             <Label>Canal</Label>
-            <Select value={canal} onValueChange={(v) => setCanal(v as AttemptChannel)}>
+            <Select value={channel} onValueChange={(v) => setChannel(v as AttemptChannel)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -118,7 +116,7 @@ export function AttemptForm({
           {/* Resultado */}
           <div className="space-y-2">
             <Label>Resultado</Label>
-            <Select value={resultado} onValueChange={(v) => setResultado(v as AttemptResult)}>
+            <Select value={status} onValueChange={(v) => setStatus(v as AttemptResult)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -137,14 +135,14 @@ export function AttemptForm({
             <Label>Observações</Label>
             <Textarea
               placeholder="Descreva o contato realizado..."
-              value={observacoes}
-              onChange={(e) => setObservacoes(e.target.value)}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
               rows={3}
             />
           </div>
 
           {/* Promise Toggle */}
-          {resultado === 'contato_efetivo' && (
+          {status === 'contato_efetivo' && (
             <Tabs value={createPromise ? 'promise' : 'no-promise'} onValueChange={(v) => setCreatePromise(v === 'promise')}>
               <TabsList className="w-full">
                 <TabsTrigger value="no-promise" className="flex-1">Sem Promessa</TabsTrigger>
@@ -192,17 +190,6 @@ export function AttemptForm({
                       />
                     </PopoverContent>
                   </Popover>
-                </div>
-
-                {/* Obs Promessa */}
-                <div className="space-y-2">
-                  <Label>Observações da Promessa</Label>
-                  <Textarea
-                    placeholder="Detalhes sobre o acordo..."
-                    value={obsPromessa}
-                    onChange={(e) => setObsPromessa(e.target.value)}
-                    rows={2}
-                  />
                 </div>
               </TabsContent>
             </Tabs>

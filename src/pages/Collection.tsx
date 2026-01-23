@@ -43,21 +43,28 @@ export default function Collection() {
   const handleSubmitAttempt = async (data: AttemptFormData) => {
     if (!selectedCustomer) return;
 
+    // Use first_invoice_id from the customer queue item
+    const invoiceId = selectedCustomer.first_invoice_id;
+    if (!invoiceId) {
+      toast.error('Nenhuma fatura encontrada para este cliente');
+      return;
+    }
+
     setIsSaving(true);
     try {
       await registerAttempt({
         customer_id: selectedCustomer.customer_id,
-        canal: data.canal,
-        resultado: data.resultado,
-        observacoes: data.observacoes,
+        invoice_id: invoiceId,
+        channel: data.channel,
+        status: data.status,
+        notes: data.notes,
       });
 
       if (data.createPromise && data.promiseData) {
         await registerPromise({
-          customer_id: selectedCustomer.customer_id,
+          invoice_id: invoiceId,
           valor_prometido: data.promiseData.valor_prometido,
-          data_pagamento_previsto: data.promiseData.data_pagamento_previsto,
-          observacoes: data.promiseData.observacoes,
+          data_prometida: data.promiseData.data_prometida,
         });
         toast.success('Tentativa e promessa registradas!');
       } else {
