@@ -1,24 +1,25 @@
+// Issue types - matching Supabase enum issue_type (lowercase)
 export type IssueType = 
-  | 'CONTRATO_SEM_CLIENTE'
-  | 'CLIENTE_SEM_CONTRATO'
-  | 'CONTRATO_SEM_MATCH_OS'
-  | 'MULTIPLOS_MATCHES'
-  | 'DADOS_DIVERGENTES';
+  | 'cliente_sem_contrato'
+  | 'contrato_sem_venda'
+  | 'valor_divergente'
+  | 'dados_incorretos';
 
 export type IssueStatus = 'PENDENTE' | 'RESOLVIDO';
 
+// ReconciliationIssue - matching Supabase table structure
 export interface ReconciliationIssue {
   id: string;
-  issue_type: IssueType;
-  os_id: string | null;
-  contract_id: string | null;
+  tipo: IssueType;
+  issue_type: IssueType | null;
   customer_id: string | null;
-  details: Record<string, any>;
-  status: IssueStatus;
-  created_at: string;
+  operator_contract_id: string | null;
+  sales_base_id: string | null;
+  descricao: string | null;
+  status: string | null;
+  created_at: string | null;
   resolved_at: string | null;
   resolved_by: string | null;
-  resolution_notes: string | null;
   // Joined data
   sales_base?: {
     os: string;
@@ -62,36 +63,31 @@ export interface ReconciliationStats {
   byType: Record<IssueType, number>;
 }
 
+// Issue type configurations - matching Supabase enum (lowercase)
 export const ISSUE_TYPE_CONFIG: Record<IssueType, { label: string; description: string; color: string; icon: string }> = {
-  CONTRATO_SEM_CLIENTE: {
-    label: 'Contrato sem Cliente',
-    description: 'Contrato na base operadora sem cliente vinculado',
-    color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30',
-    icon: 'UserX'
-  },
-  CLIENTE_SEM_CONTRATO: {
+  cliente_sem_contrato: {
     label: 'Cliente sem Contrato',
     description: 'Cliente na base de vendas sem contrato na operadora',
     color: 'text-yellow-600 bg-yellow-100 dark:bg-yellow-900/30',
     icon: 'FileX'
   },
-  CONTRATO_SEM_MATCH_OS: {
-    label: 'Contrato sem Match OS',
-    description: 'Contrato sem correspondência na base de vendas',
+  contrato_sem_venda: {
+    label: 'Contrato sem Venda',
+    description: 'Contrato na base operadora sem registro de venda',
+    color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30',
+    icon: 'UserX'
+  },
+  valor_divergente: {
+    label: 'Valor Divergente',
+    description: 'Valor do contrato não corresponde ao valor da venda',
     color: 'text-red-600 bg-red-100 dark:bg-red-900/30',
-    icon: 'Unlink'
+    icon: 'AlertTriangle'
   },
-  MULTIPLOS_MATCHES: {
-    label: 'Múltiplos Matches',
-    description: 'Múltiplas correspondências encontradas',
-    color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30',
-    icon: 'Copy'
-  },
-  DADOS_DIVERGENTES: {
-    label: 'Dados Divergentes',
+  dados_incorretos: {
+    label: 'Dados Incorretos',
     description: 'Dados não correspondem entre as bases',
     color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30',
-    icon: 'AlertTriangle'
+    icon: 'AlertCircle'
   }
 };
 

@@ -57,7 +57,7 @@ export function AttemptForm({
   isLoading 
 }: AttemptFormProps) {
   const [channel, setChannel] = useState<AttemptChannel>(initialChannel);
-  const [status, setStatus] = useState<AttemptResult>('contato_efetivo');
+  const [status, setStatus] = useState<AttemptResult>('sucesso');
   const [notes, setNotes] = useState('');
   const [createPromise, setCreatePromise] = useState(false);
   const [valorPrometido, setValorPrometido] = useState('');
@@ -142,7 +142,7 @@ export function AttemptForm({
           </div>
 
           {/* Promise Toggle */}
-          {status === 'contato_efetivo' && (
+          {status === 'sucesso' && (
             <Tabs value={createPromise ? 'promise' : 'no-promise'} onValueChange={(v) => setCreatePromise(v === 'promise')}>
               <TabsList className="w-full">
                 <TabsTrigger value="no-promise" className="flex-1">Sem Promessa</TabsTrigger>
