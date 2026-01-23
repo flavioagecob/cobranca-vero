@@ -15,9 +15,15 @@ interface CustomerFiltersProps {
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
   safraOptions: string[];
+  statusContratoOptions: string[];
 }
 
-export function CustomerFilters({ filters, onFiltersChange, safraOptions }: CustomerFiltersProps) {
+export function CustomerFilters({ 
+  filters, 
+  onFiltersChange, 
+  safraOptions,
+  statusContratoOptions 
+}: CustomerFiltersProps) {
   const handleSearchChange = (value: string) => {
     onFiltersChange({ ...filters, search: value });
   };
@@ -40,15 +46,22 @@ export function CustomerFilters({ filters, onFiltersChange, safraOptions }: Cust
     });
   };
 
-  const clearFilters = () => {
-    onFiltersChange({ search: '', uf: '', status: 'all', safra: '' });
+  const handleStatusContratoChange = (value: string) => {
+    onFiltersChange({ 
+      ...filters, 
+      statusContrato: value === 'all' ? '' : value
+    });
   };
 
-  const hasFilters = filters.search || filters.uf || filters.status !== 'all' || filters.safra;
+  const clearFilters = () => {
+    onFiltersChange({ search: '', uf: '', status: 'all', safra: '', statusContrato: '' });
+  };
+
+  const hasFilters = filters.search || filters.uf || filters.status !== 'all' || filters.safra || filters.statusContrato;
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3">
-      <div className="relative flex-1">
+    <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+      <div className="relative flex-1 min-w-[200px]">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Buscar por nome, CPF/CNPJ, email ou telefone..."
@@ -59,21 +72,51 @@ export function CustomerFilters({ filters, onFiltersChange, safraOptions }: Cust
       </div>
 
       <Select value={filters.status} onValueChange={handleStatusChange}>
-        <SelectTrigger className="w-full sm:w-44">
+        <SelectTrigger className="w-full sm:w-40">
           <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
-          <SelectValue placeholder="Status" />
+          <SelectValue placeholder="Situação" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Todos</SelectItem>
-          <SelectItem value="active">Contrato Ativo</SelectItem>
-          <SelectItem value="pending">Fatura Pendente</SelectItem>
-          <SelectItem value="overdue">Fatura Vencida</SelectItem>
-          <SelectItem value="no_contract">Sem Contrato</SelectItem>
+          <SelectItem value="all">Todas Situações</SelectItem>
+          <SelectItem value="paid">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Em Dia
+            </span>
+          </SelectItem>
+          <SelectItem value="pending">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Pendentes
+            </span>
+          </SelectItem>
+          <SelectItem value="overdue">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-destructive" />
+              Em Atraso
+            </span>
+          </SelectItem>
         </SelectContent>
       </Select>
 
+      {statusContratoOptions.length > 0 && (
+        <Select value={filters.statusContrato || 'all'} onValueChange={handleStatusContratoChange}>
+          <SelectTrigger className="w-full sm:w-40">
+            <SelectValue placeholder="Status Contrato" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos Status</SelectItem>
+            {statusContratoOptions.map((status) => (
+              <SelectItem key={status} value={status}>
+                {status}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
       <Select value={filters.safra || 'all'} onValueChange={handleSafraChange}>
-        <SelectTrigger className="w-full sm:w-44">
+        <SelectTrigger className="w-full sm:w-36">
           <SelectValue placeholder="Safra" />
         </SelectTrigger>
         <SelectContent>
@@ -87,7 +130,7 @@ export function CustomerFilters({ filters, onFiltersChange, safraOptions }: Cust
       </Select>
 
       <Select value={filters.uf || 'all'} onValueChange={handleUfChange}>
-        <SelectTrigger className="w-full sm:w-32">
+        <SelectTrigger className="w-full sm:w-28">
           <SelectValue placeholder="UF" />
         </SelectTrigger>
         <SelectContent>
@@ -101,7 +144,7 @@ export function CustomerFilters({ filters, onFiltersChange, safraOptions }: Cust
       </Select>
 
       {hasFilters && (
-        <Button variant="ghost" size="icon" onClick={clearFilters}>
+        <Button variant="ghost" size="icon" onClick={clearFilters} title="Limpar filtros">
           <X className="h-4 w-4" />
         </Button>
       )}

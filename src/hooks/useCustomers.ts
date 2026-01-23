@@ -1,6 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { Customer, CustomerWithDetails, CustomerWithOperatorSummary, CustomerFilters, PaginationState, CustomerSortField, CustomerSortState } from '@/types/customer';
+import type { 
+  CustomerWithDetails, 
+  CustomerWithOperatorSummary, 
+  CustomerFilters, 
+  PaginationState, 
+  CustomerSortField, 
+  CustomerSortState,
+  CustomerStats,
+  CustomerSituacao
+} from '@/types/customer';
 
 interface UseCustomersReturn {
   customers: CustomerWithOperatorSummary[];
@@ -9,6 +18,8 @@ interface UseCustomersReturn {
   pagination: PaginationState;
   filters: CustomerFilters;
   safraOptions: string[];
+  statusContratoOptions: string[];
+  stats: CustomerStats;
   sortState: CustomerSortState;
   setFilters: (filters: CustomerFilters) => void;
   setPage: (page: number) => void;
@@ -22,6 +33,17 @@ interface UseCustomerDetailReturn {
   error: string | null;
   refetch: () => void;
 }
+
+// Calculate customer situação based on invoices
+const calculateSituacao = (
+  hasContracts: boolean,
+  hasUnpaidInvoices: boolean,
+  hasOverdueInvoices: boolean
+): CustomerSituacao => {
+  if (!hasContracts || !hasUnpaidInvoices) return 'paid';
+  if (hasOverdueInvoices) return 'overdue';
+  return 'pending';
+};
 
 export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn => {
   const [customers, setCustomers] = useState<CustomerWithOperatorSummary[]>([]);
@@ -37,8 +59,16 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
     uf: '',
     status: 'all',
     safra: '',
+    statusContrato: '',
   });
   const [safraOptions, setSafraOptions] = useState<string[]>([]);
+  const [statusContratoOptions, setStatusContratoOptions] = useState<string[]>([]);
+  const [stats, setStats] = useState<CustomerStats>({
+    total: 0,
+    paid: 0,
+    pending: 0,
+    overdue: 0,
+  });
   const [sortState, setSortState] = useState<CustomerSortState>({
     field: 'nome',
     direction: 'asc',
@@ -49,78 +79,97 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
     setError(null);
 
     try {
-      // Fetch unique safras for filter options
-      const { data: safrasData } = await supabase
-        .from('operator_contracts')
-        .select('mes_safra_cadastro')
-        .not('mes_safra_cadastro', 'is', null);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
 
-      if (safrasData) {
-        const uniqueSafras = [...new Set(safrasData.map(s => s.mes_safra_cadastro).filter(Boolean))] as string[];
-        setSafraOptions(uniqueSafras.sort());
-      }
+      // Fetch all contracts for calculating stats and situação
+      const { data: allContracts } = await supabase
+        .from('operator_contracts')
+        .select('customer_id, status_contrato, valor_fatura, data_vencimento, data_pagamento, mes_safra_cadastro');
+
+      // Extract unique safras and status_contrato for filters
+      const uniqueSafras = [...new Set((allContracts || [])
+        .map(c => c.mes_safra_cadastro)
+        .filter(Boolean))] as string[];
+      setSafraOptions(uniqueSafras.sort());
+
+      const uniqueStatusContrato = [...new Set((allContracts || [])
+        .map(c => c.status_contrato)
+        .filter(Boolean))] as string[];
+      setStatusContratoOptions(uniqueStatusContrato.sort());
+
+      // Group contracts by customer for situação calculation
+      const contractsByCustomer: Record<string, typeof allContracts> = {};
+      (allContracts || []).forEach(contract => {
+        if (!contractsByCustomer[contract.customer_id]) {
+          contractsByCustomer[contract.customer_id] = [];
+        }
+        contractsByCustomer[contract.customer_id]!.push(contract);
+      });
+
+      // Calculate situação for each customer
+      const customerSituacaoMap: Record<string, CustomerSituacao> = {};
+      Object.entries(contractsByCustomer).forEach(([customerId, contracts]) => {
+        const hasContracts = contracts!.length > 0;
+        const hasUnpaidInvoices = contracts!.some(c => c.data_pagamento === null);
+        const hasOverdueInvoices = contracts!.some(c => {
+          if (c.data_pagamento !== null) return false;
+          if (!c.data_vencimento) return false;
+          return c.data_vencimento < todayStr;
+        });
+        customerSituacaoMap[customerId] = calculateSituacao(hasContracts, hasUnpaidInvoices, hasOverdueInvoices);
+      });
 
       // First, get customer IDs that match the safra filter if needed
       let customerIdsWithSafra: string[] | null = null;
       
       if (filters.safra) {
-        const { data: contractsWithSafra } = await supabase
-          .from('operator_contracts')
-          .select('customer_id')
-          .eq('mes_safra_cadastro', filters.safra);
-        
-        customerIdsWithSafra = [...new Set((contractsWithSafra || []).map(c => c.customer_id))];
+        customerIdsWithSafra = [...new Set((allContracts || [])
+          .filter(c => c.mes_safra_cadastro === filters.safra)
+          .map(c => c.customer_id))];
         
         if (customerIdsWithSafra.length === 0) {
           setCustomers([]);
           setPagination((prev) => ({ ...prev, total: 0 }));
+          setStats({ total: 0, paid: 0, pending: 0, overdue: 0 });
           setIsLoading(false);
           return;
         }
       }
 
-      // Get customer IDs that match the status filter if needed
-      let customerIdsWithStatus: string[] | null = null;
+      // Get customer IDs that match the statusContrato filter if needed
+      let customerIdsWithStatusContrato: string[] | null = null;
       
-      if (filters.status !== 'all') {
-        const today = new Date().toISOString().split('T')[0];
+      if (filters.statusContrato) {
+        customerIdsWithStatusContrato = [...new Set((allContracts || [])
+          .filter(c => c.status_contrato?.toLowerCase() === filters.statusContrato.toLowerCase())
+          .map(c => c.customer_id))];
         
-        if (filters.status === 'no_contract') {
-          // Get customers WITHOUT contracts
-          const { data: allCustomers } = await supabase
-            .from('customers')
-            .select('id');
-          
-          const { data: customersWithContracts } = await supabase
-            .from('operator_contracts')
-            .select('customer_id');
-          
-          const withContractIds = new Set((customersWithContracts || []).map(c => c.customer_id));
-          customerIdsWithStatus = (allCustomers || [])
-            .map(c => c.id)
-            .filter(id => !withContractIds.has(id));
-        } else {
-          // Build contract query based on status
-          let contractQuery = supabase.from('operator_contracts').select('customer_id');
-          
-          if (filters.status === 'active') {
-            contractQuery = contractQuery.or('status_operadora.ilike.ativo,status_operadora.ilike.active');
-          } else if (filters.status === 'pending') {
-            contractQuery = contractQuery.or('status_contrato.ilike.pendente,status_contrato.ilike.pending,status_contrato.ilike.aberto');
-          } else if (filters.status === 'overdue') {
-            contractQuery = contractQuery
-              .lt('data_vencimento', today)
-              .is('data_pagamento', null); // Fatura não paga = sem data de pagamento
-          }
-          
-          const { data: contractsData } = await contractQuery;
-          customerIdsWithStatus = [...new Set((contractsData || []).map(c => c.customer_id))];
-        }
-        
-        // If no customers match the status filter, return empty
-        if (customerIdsWithStatus.length === 0) {
+        if (customerIdsWithStatusContrato.length === 0) {
           setCustomers([]);
           setPagination((prev) => ({ ...prev, total: 0 }));
+          setStats({ total: 0, paid: 0, pending: 0, overdue: 0 });
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Get customer IDs that match the situação filter if needed
+      let customerIdsWithSituacao: string[] | null = null;
+      
+      if (filters.status !== 'all') {
+        customerIdsWithSituacao = Object.entries(customerSituacaoMap)
+          .filter(([_, situacao]) => situacao === filters.status)
+          .map(([customerId]) => customerId);
+        
+        // For 'paid' status, also include customers without contracts
+        if (filters.status === 'paid') {
+          // Will add these after fetching all customers
+        } else if (customerIdsWithSituacao.length === 0) {
+          setCustomers([]);
+          setPagination((prev) => ({ ...prev, total: 0 }));
+          setStats({ total: 0, paid: 0, pending: 0, overdue: 0 });
           setIsLoading(false);
           return;
         }
@@ -131,26 +180,39 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         .from('customers')
         .select('*', { count: 'exact' });
 
-      // Apply safra filter (customer IDs)
+      // Combine all ID filters
+      let combinedIds: string[] | null = null;
+      
       if (customerIdsWithSafra) {
-        query = query.in('id', customerIdsWithSafra);
+        combinedIds = customerIdsWithSafra;
       }
-
-      // Apply status filter (customer IDs)
-      if (customerIdsWithStatus) {
-        // If both filters are active, intersect the IDs
-        if (customerIdsWithSafra) {
-          const intersection = customerIdsWithStatus.filter(id => customerIdsWithSafra!.includes(id));
-          if (intersection.length === 0) {
-            setCustomers([]);
-            setPagination((prev) => ({ ...prev, total: 0 }));
-            setIsLoading(false);
-            return;
-          }
-          query = query.in('id', intersection);
+      
+      if (customerIdsWithStatusContrato) {
+        if (combinedIds) {
+          combinedIds = combinedIds.filter(id => customerIdsWithStatusContrato!.includes(id));
         } else {
-          query = query.in('id', customerIdsWithStatus);
+          combinedIds = customerIdsWithStatusContrato;
         }
+      }
+      
+      if (customerIdsWithSituacao && filters.status !== 'paid') {
+        if (combinedIds) {
+          combinedIds = combinedIds.filter(id => customerIdsWithSituacao!.includes(id));
+        } else {
+          combinedIds = customerIdsWithSituacao;
+        }
+      }
+      
+      if (combinedIds && combinedIds.length === 0) {
+        setCustomers([]);
+        setPagination((prev) => ({ ...prev, total: 0 }));
+        setStats({ total: 0, paid: 0, pending: 0, overdue: 0 });
+        setIsLoading(false);
+        return;
+      }
+      
+      if (combinedIds) {
+        query = query.in('id', combinedIds);
       }
 
       // Apply search filter
@@ -164,10 +226,6 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         query = query.eq('uf', filters.uf);
       }
 
-      // Apply pagination
-      const from = (pagination.page - 1) * pagination.pageSize;
-      const to = from + pagination.pageSize - 1;
-
       // Apply Supabase-level sorting for direct fields
       if (['nome', 'cpf_cnpj'].includes(sortState.field)) {
         query = query.order(sortState.field, { ascending: sortState.direction === 'asc' });
@@ -175,13 +233,19 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         query = query.order('nome', { ascending: true }); // fallback
       }
 
+      // First get total count for all customers matching filters (before pagination)
+      const { count: totalCount } = await query;
+
+      // Apply pagination
+      const from = (pagination.page - 1) * pagination.pageSize;
+      const to = from + pagination.pageSize - 1;
       query = query.range(from, to);
 
-      const { data: customersData, error: queryError, count } = await query;
+      const { data: customersData, error: queryError } = await query;
 
       if (queryError) throw queryError;
 
-      // Now fetch operator data for these customers
+      // Build operator summary for customers on this page
       const customerIds = (customersData || []).map(c => c.id);
       
       let operatorSummary: Record<string, {
@@ -189,46 +253,47 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         total_valor_pendente: number;
         status_contrato: string | null;
         proxima_data_vencimento: string | null;
+        situacao: CustomerSituacao;
       }> = {};
 
       if (customerIds.length > 0) {
-        const { data: contractsData } = await supabase
-          .from('operator_contracts')
-          .select('customer_id, status_contrato, status_operadora, valor_fatura, data_vencimento, data_pagamento')
-          .in('customer_id', customerIds);
+        customerIds.forEach(customerId => {
+          const customerContracts = contractsByCustomer[customerId] || [];
+          
+          let contractsCount = 0;
+          let totalValorPendente = 0;
+          let statusContrato: string | null = null;
+          let proximaDataVencimento: string | null = null;
 
-        // Aggregate data per customer
-        (contractsData || []).forEach((contract) => {
-          const customerId = contract.customer_id;
-          if (!operatorSummary[customerId]) {
-            operatorSummary[customerId] = {
-              contracts_count: 0,
-              total_valor_pendente: 0,
-              status_contrato: null,
-              proxima_data_vencimento: null,
-            };
-          }
+          customerContracts.forEach((contract) => {
+            contractsCount++;
 
-          operatorSummary[customerId].contracts_count++;
-
-          // Sum pending values (fatura sem data de pagamento = pendente)
-          const isPending = contract.data_pagamento === null;
-          if (isPending && contract.valor_fatura) {
-            operatorSummary[customerId].total_valor_pendente += contract.valor_fatura;
-          }
-
-          // Get latest status (just use the first one found)
-          if (!operatorSummary[customerId].status_contrato && contract.status_operadora) {
-            operatorSummary[customerId].status_contrato = contract.status_operadora;
-          }
-
-          // Get next due date ONLY for unpaid invoices
-          if (isPending && contract.data_vencimento) {
-            const current = operatorSummary[customerId].proxima_data_vencimento;
-            if (!current || contract.data_vencimento < current) {
-              operatorSummary[customerId].proxima_data_vencimento = contract.data_vencimento;
+            // Sum pending values (fatura sem data de pagamento = pendente)
+            const isPending = contract.data_pagamento === null;
+            if (isPending && contract.valor_fatura) {
+              totalValorPendente += contract.valor_fatura;
             }
-          }
+
+            // Get latest status (just use the first one found)
+            if (!statusContrato && contract.status_contrato) {
+              statusContrato = contract.status_contrato;
+            }
+
+            // Get next due date ONLY for unpaid invoices
+            if (isPending && contract.data_vencimento) {
+              if (!proximaDataVencimento || contract.data_vencimento < proximaDataVencimento) {
+                proximaDataVencimento = contract.data_vencimento;
+              }
+            }
+          });
+
+          operatorSummary[customerId] = {
+            contracts_count: contractsCount,
+            total_valor_pendente: totalValorPendente,
+            status_contrato: statusContrato,
+            proxima_data_vencimento: proximaDataVencimento,
+            situacao: customerSituacaoMap[customerId] || 'paid',
+          };
         });
       }
 
@@ -239,7 +304,13 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         total_valor_pendente: operatorSummary[customer.id]?.total_valor_pendente || 0,
         status_contrato: operatorSummary[customer.id]?.status_contrato || null,
         proxima_data_vencimento: operatorSummary[customer.id]?.proxima_data_vencimento || null,
+        situacao: operatorSummary[customer.id]?.situacao || 'paid',
       }));
+
+      // Apply situação filter for 'paid' (includes customers without contracts)
+      if (filters.status === 'paid') {
+        customersWithSummary = customersWithSummary.filter(c => c.situacao === 'paid');
+      }
 
       // Apply client-side sorting for aggregated fields
       if (!['nome', 'cpf_cnpj'].includes(sortState.field)) {
@@ -258,8 +329,33 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         });
       }
 
+      // Calculate stats (for all customers, not just this page)
+      const { count: totalCustomers } = await supabase
+        .from('customers')
+        .select('*', { count: 'exact', head: true });
+
+      const customersWithContracts = new Set(Object.keys(contractsByCustomer));
+      const customersWithoutContracts = (totalCustomers || 0) - customersWithContracts.size;
+
+      let paidCount = customersWithoutContracts; // Customers without contracts are "paid"
+      let pendingCount = 0;
+      let overdueCount = 0;
+
+      Object.values(customerSituacaoMap).forEach(situacao => {
+        if (situacao === 'paid') paidCount++;
+        else if (situacao === 'pending') pendingCount++;
+        else if (situacao === 'overdue') overdueCount++;
+      });
+
+      setStats({
+        total: totalCustomers || 0,
+        paid: paidCount,
+        pending: pendingCount,
+        overdue: overdueCount,
+      });
+
       setCustomers(customersWithSummary);
-      setPagination((prev) => ({ ...prev, total: count || 0 }));
+      setPagination((prev) => ({ ...prev, total: totalCount || 0 }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar clientes');
       setCustomers([]);
@@ -295,6 +391,8 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
     pagination,
     filters,
     safraOptions,
+    statusContratoOptions,
+    stats,
     sortState,
     setFilters: handleSetFilters,
     setPage,

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Eye, Phone, Mail, AlertCircle, Clock } from 'lucide-react';
+import { Eye, Phone, Mail, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SortableHeader } from '@/components/ui/sortable-header';
-import { formatCpfCnpj, formatPhone, formatCurrency, formatDate, getStatusColor, calculateDaysOverdue } from '@/lib/formatters';
+import { formatCpfCnpj, formatPhone, formatCurrency, formatDate } from '@/lib/formatters';
+import { CUSTOMER_SITUACAO_CONFIG } from '@/types/customer';
 import type { CustomerWithOperatorSummary, CustomerSortField, CustomerSortState } from '@/types/customer';
 
 interface CustomerTableProps {
@@ -34,10 +35,10 @@ export function CustomerTable({ customers, isLoading, sortState, onSort }: Custo
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
-              <TableHead>CPF/CNPJ</TableHead>
-              <TableHead className="hidden md:table-cell">Contato</TableHead>
-              <TableHead className="hidden lg:table-cell">Contratos</TableHead>
-              <TableHead className="hidden lg:table-cell">Valor Pendente</TableHead>
+              <TableHead className="hidden sm:table-cell">CPF/CNPJ</TableHead>
+              <TableHead className="hidden lg:table-cell">Contato</TableHead>
+              <TableHead>Situação</TableHead>
+              <TableHead className="hidden md:table-cell">Valor Pendente</TableHead>
               <TableHead className="hidden xl:table-cell">Próx. Vencimento</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -46,12 +47,12 @@ export function CustomerTable({ customers, isLoading, sortState, onSort }: Custo
             {Array.from({ length: 10 }).map((_, i) => (
               <TableRow key={i}>
                 <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-                <TableCell><Skeleton className="h-4 w-36" /></TableCell>
-                <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-32" /></TableCell>
-                <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-16" /></TableCell>
-                <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
+                <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-36" /></TableCell>
+                <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-32" /></TableCell>
+                <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
                 <TableCell className="hidden xl:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
-                <TableCell><Skeleton className="h-8 w-20 ml-auto" /></TableCell>
+                <TableCell><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -73,54 +74,28 @@ export function CustomerTable({ customers, isLoading, sortState, onSort }: Custo
     );
   }
 
-  const getDueDateStatus = (dueDate: string | null) => {
-    if (!dueDate) return null;
-    
-    const daysOverdue = calculateDaysOverdue(dueDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // Parse a data corretamente para evitar problemas de timezone
-    let due: Date;
-    const isoDateMatch = dueDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (isoDateMatch) {
-      const [, year, month, day] = isoDateMatch;
-      due = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    } else {
-      due = new Date(dueDate);
+  const getSituacaoIcon = (situacao: CustomerWithOperatorSummary['situacao']) => {
+    switch (situacao) {
+      case 'paid':
+        return <CheckCircle className="h-3.5 w-3.5" />;
+      case 'pending':
+        return <Clock className="h-3.5 w-3.5" />;
+      case 'overdue':
+        return <AlertTriangle className="h-3.5 w-3.5" />;
     }
-    due.setHours(0, 0, 0, 0);
-    
-    if (daysOverdue > 0) {
-      return {
-        type: 'overdue',
-        label: `${daysOverdue}d atraso`,
-        className: 'bg-destructive/10 text-destructive border-destructive/20',
-      };
+  };
+
+  const getRowClassName = (situacao: CustomerWithOperatorSummary['situacao']) => {
+    switch (situacao) {
+      case 'paid':
+        return 'bg-emerald-500/5 hover:bg-emerald-500/10';
+      case 'pending':
+        return 'bg-amber-500/5 hover:bg-amber-500/10';
+      case 'overdue':
+        return 'bg-destructive/5 hover:bg-destructive/10';
+      default:
+        return '';
     }
-    
-    if (due.getTime() === today.getTime()) {
-      return {
-        type: 'today',
-        label: 'Vence hoje',
-        className: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
-      };
-    }
-    
-    const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays <= 7) {
-      return {
-        type: 'soon',
-        label: `Em ${diffDays}d`,
-        className: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
-      };
-    }
-    
-    return {
-      type: 'normal',
-      label: formatDate(dueDate),
-      className: 'bg-muted text-muted-foreground border-border',
-    };
   };
 
   return (
@@ -141,25 +116,18 @@ export function CustomerTable({ customers, isLoading, sortState, onSort }: Custo
               currentField={sortState.field}
               direction={sortState.direction}
               onSort={handleSort}
+              className="hidden sm:table-cell"
             >
               CPF/CNPJ
             </SortableHeader>
-            <TableHead className="hidden md:table-cell">Contato</TableHead>
-            <SortableHeader
-              field="contracts_count"
-              currentField={sortState.field}
-              direction={sortState.direction}
-              onSort={handleSort}
-              className="hidden lg:table-cell"
-            >
-              Contratos
-            </SortableHeader>
+            <TableHead className="hidden lg:table-cell">Contato</TableHead>
+            <TableHead>Situação</TableHead>
             <SortableHeader
               field="total_valor_pendente"
               currentField={sortState.field}
               direction={sortState.direction}
               onSort={handleSort}
-              className="hidden lg:table-cell"
+              className="hidden md:table-cell"
             >
               Valor Pendente
             </SortableHeader>
@@ -177,28 +145,24 @@ export function CustomerTable({ customers, isLoading, sortState, onSort }: Custo
         </TableHeader>
         <TableBody>
           {customers.map((customer) => {
-            const dueDateStatus = getDueDateStatus(customer.proxima_data_vencimento);
-            const hasOverdue = dueDateStatus?.type === 'overdue';
+            const situacaoConfig = CUSTOMER_SITUACAO_CONFIG[customer.situacao];
             
             return (
-              <TableRow key={customer.id} className={hasOverdue ? 'bg-destructive/5' : undefined}>
+              <TableRow key={customer.id} className={getRowClassName(customer.situacao)}>
                 <TableCell>
-                  <div className="flex items-center gap-2">
-                    {hasOverdue && <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />}
-                    <div>
-                      <div className="font-medium">{customer.nome}</div>
-                      {customer.status_contrato && (
-                        <Badge variant="outline" className={`mt-0.5 text-xs ${getStatusColor(customer.status_contrato)}`}>
-                          {customer.status_contrato}
-                        </Badge>
-                      )}
-                    </div>
+                  <div>
+                    <div className="font-medium">{customer.nome}</div>
+                    {customer.status_contrato && (
+                      <span className="text-xs text-muted-foreground">
+                        {customer.status_contrato}
+                      </span>
+                    )}
                   </div>
                 </TableCell>
-                <TableCell className="font-mono text-sm">
+                <TableCell className="hidden sm:table-cell font-mono text-sm">
                   {formatCpfCnpj(customer.cpf_cnpj)}
                 </TableCell>
-                <TableCell className="hidden md:table-cell">
+                <TableCell className="hidden lg:table-cell">
                   {customer.telefone && (
                     <div className="flex items-center gap-1 text-sm">
                       <Phone className="h-3 w-3 text-muted-foreground" />
@@ -212,34 +176,28 @@ export function CustomerTable({ customers, isLoading, sortState, onSort }: Custo
                     </div>
                   )}
                 </TableCell>
-                <TableCell className="hidden lg:table-cell">
-                  {customer.contracts_count > 0 ? (
-                    <span className="font-medium">{customer.contracts_count}</span>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
+                <TableCell>
+                  <Badge variant="outline" className={`${situacaoConfig.className} gap-1`}>
+                    {getSituacaoIcon(customer.situacao)}
+                    {situacaoConfig.label}
+                  </Badge>
                 </TableCell>
-                <TableCell className="hidden lg:table-cell">
+                <TableCell className="hidden md:table-cell">
                   {customer.total_valor_pendente > 0 ? (
                     <span className="font-medium text-amber-600">
                       {formatCurrency(customer.total_valor_pendente)}
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">-</span>
+                    <span className="text-emerald-600">-</span>
                   )}
                 </TableCell>
                 <TableCell className="hidden xl:table-cell">
-                  {dueDateStatus ? (
-                    <div className="flex items-center gap-1">
-                      {(dueDateStatus.type === 'overdue' || dueDateStatus.type === 'today') && (
-                        <Clock className="h-3 w-3" />
-                      )}
-                      <Badge variant="outline" className={dueDateStatus.className}>
-                        {dueDateStatus.label}
-                      </Badge>
-                    </div>
+                  {customer.proxima_data_vencimento ? (
+                    <span className={customer.situacao === 'overdue' ? 'text-destructive font-medium' : ''}>
+                      {formatDate(customer.proxima_data_vencimento)}
+                    </span>
                   ) : (
-                    <span className="text-muted-foreground">-</span>
+                    <span className="text-emerald-600 text-sm">Em dia</span>
                   )}
                 </TableCell>
                 <TableCell className="text-right">
