@@ -3,7 +3,7 @@ import { CustomerFilters } from '@/components/customers/CustomerFilters';
 import { CustomerTable } from '@/components/customers/CustomerTable';
 import { CustomerPagination } from '@/components/customers/CustomerPagination';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, CheckCircle, Clock, AlertTriangle, Download, UserPlus } from 'lucide-react';
+import { Users, CheckCircle, FileX, AlertTriangle, Download, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 
@@ -89,19 +89,19 @@ export default function Customers() {
         </Card>
 
         <Card 
-          className={`cursor-pointer transition-all hover:shadow-md border-amber-500/30 ${
-            filters.status === 'pending' ? 'ring-2 ring-amber-500' : ''
+          className={`cursor-pointer transition-all hover:shadow-md border-muted-foreground/30 ${
+            filters.status === 'no_contract' ? 'ring-2 ring-muted-foreground' : ''
           }`}
-          onClick={() => handleCardClick('pending')}
+          onClick={() => handleCardClick('no_contract')}
         >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-amber-600">Com Pendências</CardTitle>
-            <Clock className="h-4 w-4 text-amber-500" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Sem Contrato</CardTitle>
+            <FileX className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-amber-600">{stats.pending}</div>
+            <div className="text-2xl font-bold text-muted-foreground">{stats.noContract}</div>
             <p className="text-xs text-muted-foreground">
-              faturas a vencer
+              sem dados de fatura
             </p>
           </CardContent>
         </Card>
