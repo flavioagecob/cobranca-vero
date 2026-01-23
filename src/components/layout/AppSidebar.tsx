@@ -65,10 +65,6 @@ const mainNavItems: NavItem[] = [
     url: "/collection",
     icon: Phone,
     roles: ['admin', 'supervisor', 'cobrador'],
-    children: [
-      { title: "Workstation", url: "/collection" },
-      { title: "Kanban", url: "/collection/kanban" },
-    ],
   },
   {
     title: "Conciliação",

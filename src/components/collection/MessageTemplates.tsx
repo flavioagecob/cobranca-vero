@@ -10,13 +10,17 @@ import { toast } from 'sonner';
 
 interface MessageTemplatesProps {
   customerName: string;
+  customerCpf?: string;
   valorPendente?: number;
+  diasAtraso?: number;
   onSelectTemplate?: (content: string) => void;
 }
 
 export function MessageTemplates({ 
   customerName, 
+  customerCpf = '',
   valorPendente = 0,
+  diasAtraso = 0,
   onSelectTemplate 
 }: MessageTemplatesProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<MessageTemplate | null>(null);
@@ -24,19 +28,18 @@ export function MessageTemplates({
   const [copied, setCopied] = useState(false);
 
   const replaceVariables = (content: string): string => {
-    const today = new Date();
+    // Extract first name only
+    const firstName = customerName.split(' ')[0];
+    
+    // Mask CPF: show only last 5 digits
+    const cpfClean = customerCpf.replace(/\D/g, '');
+    const cpfUltimos5 = cpfClean.slice(-5);
+    
     const replacements: Record<string, string> = {
-      '{nome}': customerName.split(' ')[0], // First name
-      '{nome_completo}': customerName,
+      '{nome}': firstName,
+      '{cpf_ultimos5}': cpfUltimos5,
       '{valor}': valorPendente.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-      '{data_vencimento}': today.toLocaleDateString('pt-BR'),
-      '{dias_atraso}': '15', // Placeholder
-      '{link_pagamento}': 'https://pagamento.exemplo.com/xxx',
-      '{numero_fatura}': 'FAT-001', // Placeholder
-      '{valor_acordo}': (valorPendente * 0.9).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-      '{condicoes}': 'Entrada + 2x sem juros',
-      '{valor_prometido}': valorPendente.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-      '{data_promessa}': new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+      '{dias_atraso}': String(diasAtraso),
     };
 
     let result = content;

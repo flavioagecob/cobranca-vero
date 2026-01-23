@@ -94,24 +94,25 @@ export const PROMISE_STATUS_CONFIG: Record<PromiseStatus, { label: string; color
   cancelada: { label: 'Cancelada', color: 'bg-muted text-muted-foreground border-border' },
 };
 
-// Default message templates
+// Simplified message templates - only first name, masked CPF, and value (no payment conditions)
 export const DEFAULT_TEMPLATES: MessageTemplate[] = [
   {
     id: '1',
-    nome: 'Lembrete de Vencimento',
+    nome: 'Cobrança Simples',
     canal: 'whatsapp',
     assunto: null,
-    conteudo: `Olá {nome}! 👋
+    conteudo: `Olá {nome}!
 
-Identificamos que você possui uma fatura no valor de {valor} com vencimento para {data_vencimento}.
+Identificamos uma pendência em seu nome.
 
-Para sua comodidade, segue o link para pagamento: {link_pagamento}
+📋 CPF: ***{cpf_ultimos5}
+💰 Valor: {valor}
 
-Em caso de dúvidas, estamos à disposição.
+Entre em contato para regularizar sua situação.
 
 Atenciosamente,
 Equipe de Cobrança`,
-    variaveis: ['nome', 'valor', 'data_vencimento', 'link_pagamento'],
+    variaveis: ['nome', 'cpf_ultimos5', 'valor'],
     ativo: true,
   },
   {
@@ -119,33 +120,37 @@ Equipe de Cobrança`,
     nome: 'Aviso de Atraso',
     canal: 'whatsapp',
     assunto: null,
-    conteudo: `Olá {nome}! 
+    conteudo: `Olá {nome}!
 
-Verificamos que sua fatura no valor de {valor}, vencida em {data_vencimento}, encontra-se em aberto há {dias_atraso} dias.
+Você possui uma fatura vencida há {dias_atraso} dias.
 
-Evite a suspensão dos serviços. Entre em contato para regularizar sua situação.
+📋 CPF: ***{cpf_ultimos5}
+💰 Valor: {valor}
 
-📞 Atendimento: (11) XXXX-XXXX
+Evite restrições no seu nome. Entre em contato para regularizar.
 
 Aguardamos seu retorno!`,
-    variaveis: ['nome', 'valor', 'data_vencimento', 'dias_atraso'],
+    variaveis: ['nome', 'cpf_ultimos5', 'valor', 'dias_atraso'],
     ativo: true,
   },
   {
     id: '3',
-    nome: 'Negociação',
+    nome: 'Último Aviso',
     canal: 'whatsapp',
     assunto: null,
     conteudo: `Olá {nome}!
 
-Temos uma proposta especial para você regularizar sua situação.
+⚠️ ÚLTIMO AVISO
 
-Valor original: {valor}
-Proposta de acordo: {valor_acordo}
-Condições: {condicoes}
+Identificamos uma pendência em aberto:
 
-Esta oferta é válida por tempo limitado. Entre em contato para mais detalhes!`,
-    variaveis: ['nome', 'valor', 'valor_acordo', 'condicoes'],
+📋 CPF: ***{cpf_ultimos5}
+💰 Valor: {valor}
+
+Regularize sua situação para evitar medidas adicionais.
+
+Estamos à disposição para ajudar.`,
+    variaveis: ['nome', 'cpf_ultimos5', 'valor'],
     ativo: true,
   },
   {
@@ -155,40 +160,37 @@ Esta oferta é válida por tempo limitado. Entre em contato para mais detalhes!`
     assunto: null,
     conteudo: `Olá {nome}!
 
-Confirmamos o registro da sua promessa de pagamento:
+Confirmamos o registro do seu contato.
 
-💰 Valor: {valor_prometido}
-📅 Data prevista: {data_promessa}
+📋 CPF: ***{cpf_ultimos5}
+💰 Valor pendente: {valor}
 
-Lembre-se de efetuar o pagamento até a data combinada para evitar novas cobranças.
+Lembre-se de efetuar o pagamento conforme combinado para evitar novas cobranças.
 
 Obrigado pela colaboração!`,
-    variaveis: ['nome', 'valor_prometido', 'data_promessa'],
+    variaveis: ['nome', 'cpf_ultimos5', 'valor'],
     ativo: true,
   },
   {
     id: '5',
     nome: 'E-mail de Cobrança',
     canal: 'email',
-    assunto: 'Aviso de Pendência Financeira - {numero_fatura}',
+    assunto: 'Aviso de Pendência Financeira',
     conteudo: `Prezado(a) {nome},
 
-Identificamos que existe uma pendência financeira em seu nome referente à fatura {numero_fatura}, no valor de {valor}, com vencimento em {data_vencimento}.
+Identificamos que existe uma pendência financeira em seu nome no valor de {valor}.
 
-Solicitamos a regularização desta pendência o mais breve possível para evitar a interrupção dos serviços.
+CPF: ***{cpf_ultimos5}
 
-Para sua comodidade, disponibilizamos as seguintes formas de pagamento:
-- Boleto bancário
-- PIX
-- Cartão de crédito
+Solicitamos a regularização desta pendência o mais breve possível.
 
-Em caso de dúvidas ou para negociação, entre em contato pelo telefone (11) XXXX-XXXX.
+Em caso de dúvidas, entre em contato conosco.
 
 Caso já tenha efetuado o pagamento, por favor desconsidere este aviso.
 
 Atenciosamente,
 Departamento Financeiro`,
-    variaveis: ['nome', 'numero_fatura', 'valor', 'data_vencimento'],
+    variaveis: ['nome', 'cpf_ultimos5', 'valor'],
     ativo: true,
   },
 ];
