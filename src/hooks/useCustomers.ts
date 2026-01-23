@@ -167,19 +167,17 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         }
       }
 
-      // Get customer IDs that match the parcela vencida filter if needed
-      let customerIdsWithParcelaVencida: string[] | null = null;
+      // Get customer IDs that match the parcela filter if needed
+      // When parcela is filtered, we show ALL customers with that parcela (paid or not)
+      // Stats will reflect the status of that specific parcela
+      let customerIdsWithParcela: string[] | null = null;
       
       if (filters.parcela) {
-        customerIdsWithParcelaVencida = [...new Set((allContracts || [])
-          .filter(c => 
-            c.numero_fatura === filters.parcela &&
-            c.data_pagamento === null &&
-            c.data_vencimento && c.data_vencimento < todayStr
-          )
+        customerIdsWithParcela = [...new Set((allContracts || [])
+          .filter(c => c.numero_fatura === filters.parcela)
           .map(c => c.customer_id))];
         
-        if (customerIdsWithParcelaVencida.length === 0) {
+        if (customerIdsWithParcela.length === 0) {
           setCustomers([]);
           setPagination((prev) => ({ ...prev, total: 0 }));
           setStats({ total: 0, paid: 0, overdue: 0, noContract: 0 });
@@ -231,11 +229,11 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         }
       }
 
-      if (customerIdsWithParcelaVencida) {
+      if (customerIdsWithParcela) {
         if (combinedIds) {
-          combinedIds = combinedIds.filter(id => customerIdsWithParcelaVencida!.includes(id));
+          combinedIds = combinedIds.filter(id => customerIdsWithParcela!.includes(id));
         } else {
-          combinedIds = customerIdsWithParcelaVencida;
+          combinedIds = customerIdsWithParcela;
         }
       }
       
@@ -384,88 +382,129 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         );
       }
 
-      // Group filtered contracts by customer
-      const filteredContractsByCustomer: Record<string, typeof filteredContracts> = {};
-      filteredContracts.forEach(contract => {
-        if (!filteredContractsByCustomer[contract.customer_id]) {
-          filteredContractsByCustomer[contract.customer_id] = [];
-        }
-        filteredContractsByCustomer[contract.customer_id]!.push(contract);
-      });
-
-      // Calculate situação for each customer based on FILTERED contracts
-      const filteredCustomerSituacaoMap: Record<string, CustomerSituacao> = {};
-      Object.entries(filteredContractsByCustomer).forEach(([customerId, contracts]) => {
-        const hasContracts = contracts!.length > 0;
-        const hasOverdueInvoices = contracts!.some(c => {
-          if (c.data_pagamento !== null) return false;
-          if (!c.data_vencimento) return false;
-          return c.data_vencimento < todayStr;
+      // When filtering by parcela, calculate stats specifically for that parcela
+      if (filters.parcela) {
+        // Filter to only contracts with this specific parcela number
+        const parcelaContracts = (allContracts || []).filter(c => c.numero_fatura === filters.parcela);
+        
+        // Group by customer to get unique customer counts
+        const customerParcelaMap: Record<string, { hasParcela: boolean; isPaid: boolean; isOverdue: boolean }> = {};
+        
+        parcelaContracts.forEach(contract => {
+          const customerId = contract.customer_id;
+          const isPaid = contract.data_pagamento !== null;
+          const isOverdue = !isPaid && contract.data_vencimento && contract.data_vencimento < todayStr;
+          
+          if (!customerParcelaMap[customerId]) {
+            customerParcelaMap[customerId] = { hasParcela: true, isPaid: false, isOverdue: false };
+          }
+          
+          // If any contract for this parcela is paid, customer is "paid" for this parcela
+          if (isPaid) customerParcelaMap[customerId].isPaid = true;
+          // If any contract for this parcela is overdue, customer is "overdue" for this parcela
+          if (isOverdue) customerParcelaMap[customerId].isOverdue = true;
         });
-        filteredCustomerSituacaoMap[customerId] = calculateSituacao(hasContracts, hasOverdueInvoices);
-      });
-
-      // Get customer IDs from filtered contracts
-      const customersWithFilteredContracts = new Set(Object.keys(filteredContractsByCustomer));
-
-      // Build stats query
-      let statsQuery = supabase
-        .from('customers')
-        .select('*', { count: 'exact', head: true });
-
-      // If filtering by safra, statusContrato, or parcela, limit to customers with matching contracts
-      const hasContractFilter = filters.safra || filters.statusContrato || filters.parcela;
-      
-      if (hasContractFilter) {
-        if (customersWithFilteredContracts.size > 0) {
-          statsQuery = statsQuery.in('id', [...customersWithFilteredContracts]);
-        } else {
-          // No customers match the contract filters
-          setStats({ total: 0, paid: 0, overdue: 0, noContract: 0 });
-          setCustomers(customersWithSummary);
-          setPagination((prev) => ({ ...prev, total: totalCount || 0 }));
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      const { count: totalFilteredCustomers } = await statsQuery;
-
-      // Calculate situação counts based on filtered data
-      let paidCount = 0;
-      let overdueCount = 0;
-      let noContractCount = 0;
-
-      if (hasContractFilter) {
-        // When filtering by contracts, use the filtered situação map
-        // No "sem contrato" makes sense when filtering by contract fields
-        Object.values(filteredCustomerSituacaoMap).forEach(situacao => {
-          if (situacao === 'paid') paidCount++;
-          else if (situacao === 'overdue') overdueCount++;
+        
+        // Count stats for this specific parcela
+        let parcelaPaidCount = 0;
+        let parcelaOverdueCount = 0;
+        
+        Object.values(customerParcelaMap).forEach(status => {
+          if (status.isPaid) parcelaPaidCount++;
+          else if (status.isOverdue) parcelaOverdueCount++;
         });
-        noContractCount = 0; // Doesn't apply when filtering by contract fields
+        
+        setStats({
+          total: Object.keys(customerParcelaMap).length,
+          paid: parcelaPaidCount,
+          overdue: parcelaOverdueCount,
+          noContract: 0, // Não se aplica quando filtrando por parcela
+        });
       } else {
-        // No contract filter: use global counts
-        const allCustomersWithContracts = new Set(Object.keys(contractsByCustomer));
-        
-        Object.values(customerSituacaoMap).forEach(situacao => {
-          if (situacao === 'paid') paidCount++;
-          else if (situacao === 'overdue') overdueCount++;
+        // Original logic for non-parcela filters
+        // Group filtered contracts by customer
+        const filteredContractsByCustomer: Record<string, typeof filteredContracts> = {};
+        filteredContracts.forEach(contract => {
+          if (!filteredContractsByCustomer[contract.customer_id]) {
+            filteredContractsByCustomer[contract.customer_id] = [];
+          }
+          filteredContractsByCustomer[contract.customer_id]!.push(contract);
         });
-        
-        const { count: globalTotalCustomers } = await supabase
+
+        // Calculate situação for each customer based on FILTERED contracts
+        const filteredCustomerSituacaoMap: Record<string, CustomerSituacao> = {};
+        Object.entries(filteredContractsByCustomer).forEach(([customerId, contracts]) => {
+          const hasContracts = contracts!.length > 0;
+          const hasOverdueInvoices = contracts!.some(c => {
+            if (c.data_pagamento !== null) return false;
+            if (!c.data_vencimento) return false;
+            return c.data_vencimento < todayStr;
+          });
+          filteredCustomerSituacaoMap[customerId] = calculateSituacao(hasContracts, hasOverdueInvoices);
+        });
+
+        // Get customer IDs from filtered contracts
+        const customersWithFilteredContracts = new Set(Object.keys(filteredContractsByCustomer));
+
+        // Build stats query
+        let statsQuery = supabase
           .from('customers')
           .select('*', { count: 'exact', head: true });
-        
-        noContractCount = (globalTotalCustomers || 0) - allCustomersWithContracts.size;
-      }
 
-      setStats({
-        total: totalFilteredCustomers || 0,
-        paid: paidCount,
-        overdue: overdueCount,
-        noContract: noContractCount,
-      });
+        // If filtering by safra or statusContrato, limit to customers with matching contracts
+        const hasContractFilter = filters.safra || filters.statusContrato;
+        
+        if (hasContractFilter) {
+          if (customersWithFilteredContracts.size > 0) {
+            statsQuery = statsQuery.in('id', [...customersWithFilteredContracts]);
+          } else {
+            // No customers match the contract filters
+            setStats({ total: 0, paid: 0, overdue: 0, noContract: 0 });
+            setCustomers(customersWithSummary);
+            setPagination((prev) => ({ ...prev, total: totalCount || 0 }));
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        const { count: totalFilteredCustomers } = await statsQuery;
+
+        // Calculate situação counts based on filtered data
+        let paidCount = 0;
+        let overdueCount = 0;
+        let noContractCount = 0;
+
+        if (hasContractFilter) {
+          // When filtering by contracts, use the filtered situação map
+          // No "sem contrato" makes sense when filtering by contract fields
+          Object.values(filteredCustomerSituacaoMap).forEach(situacao => {
+            if (situacao === 'paid') paidCount++;
+            else if (situacao === 'overdue') overdueCount++;
+          });
+          noContractCount = 0; // Doesn't apply when filtering by contract fields
+        } else {
+          // No contract filter: use global counts
+          const allCustomersWithContracts = new Set(Object.keys(contractsByCustomer));
+          
+          Object.values(customerSituacaoMap).forEach(situacao => {
+            if (situacao === 'paid') paidCount++;
+            else if (situacao === 'overdue') overdueCount++;
+          });
+          
+          const { count: globalTotalCustomers } = await supabase
+            .from('customers')
+            .select('*', { count: 'exact', head: true });
+          
+          noContractCount = (globalTotalCustomers || 0) - allCustomersWithContracts.size;
+        }
+
+        setStats({
+          total: totalFilteredCustomers || 0,
+          paid: paidCount,
+          overdue: overdueCount,
+          noContract: noContractCount,
+        });
+      }
 
       setCustomers(customersWithSummary);
       setPagination((prev) => ({ ...prev, total: totalCount || 0 }));
