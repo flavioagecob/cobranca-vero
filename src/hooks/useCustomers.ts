@@ -331,24 +331,126 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         });
       }
 
-      // Calculate stats (for all customers, not just this page)
-      const { count: totalCustomers } = await supabase
+      // Calculate stats based on FILTERED contracts
+      // First, filter contracts by safra and statusContrato
+      let filteredContracts = allContracts || [];
+
+      if (filters.safra) {
+        filteredContracts = filteredContracts.filter(c => c.mes_safra_cadastro === filters.safra);
+      }
+
+      if (filters.statusContrato) {
+        filteredContracts = filteredContracts.filter(
+          c => c.status_contrato?.toLowerCase() === filters.statusContrato.toLowerCase()
+        );
+      }
+
+      // Group filtered contracts by customer
+      const filteredContractsByCustomer: Record<string, typeof filteredContracts> = {};
+      filteredContracts.forEach(contract => {
+        if (!filteredContractsByCustomer[contract.customer_id]) {
+          filteredContractsByCustomer[contract.customer_id] = [];
+        }
+        filteredContractsByCustomer[contract.customer_id]!.push(contract);
+      });
+
+      // Calculate situação for each customer based on FILTERED contracts
+      const filteredCustomerSituacaoMap: Record<string, CustomerSituacao> = {};
+      Object.entries(filteredContractsByCustomer).forEach(([customerId, contracts]) => {
+        const hasContracts = contracts!.length > 0;
+        const hasOverdueInvoices = contracts!.some(c => {
+          if (c.data_pagamento !== null) return false;
+          if (!c.data_vencimento) return false;
+          return c.data_vencimento < todayStr;
+        });
+        filteredCustomerSituacaoMap[customerId] = calculateSituacao(hasContracts, hasOverdueInvoices);
+      });
+
+      // Get customer IDs from filtered contracts
+      const customersWithFilteredContracts = new Set(Object.keys(filteredContractsByCustomer));
+
+      // Build stats query with UF filter
+      let statsQuery = supabase
         .from('customers')
         .select('*', { count: 'exact', head: true });
 
-      const customersWithContracts = new Set(Object.keys(contractsByCustomer));
-      const noContractCount = (totalCustomers || 0) - customersWithContracts.size;
+      if (filters.uf) {
+        statsQuery = statsQuery.eq('uf', filters.uf);
+      }
 
+      // If filtering by safra or statusContrato, limit to customers with matching contracts
+      const hasContractFilter = filters.safra || filters.statusContrato;
+      
+      if (hasContractFilter) {
+        if (customersWithFilteredContracts.size > 0) {
+          statsQuery = statsQuery.in('id', [...customersWithFilteredContracts]);
+        } else {
+          // No customers match the contract filters
+          setStats({ total: 0, paid: 0, overdue: 0, noContract: 0 });
+          setCustomers(customersWithSummary);
+          setPagination((prev) => ({ ...prev, total: totalCount || 0 }));
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      const { count: totalFilteredCustomers } = await statsQuery;
+
+      // Calculate situação counts based on filtered data
       let paidCount = 0;
       let overdueCount = 0;
+      let noContractCount = 0;
 
-      Object.values(customerSituacaoMap).forEach(situacao => {
-        if (situacao === 'paid') paidCount++;
-        else if (situacao === 'overdue') overdueCount++;
-      });
+      if (hasContractFilter) {
+        // When filtering by contracts, use the filtered situação map
+        // No "sem contrato" makes sense when filtering by contract fields
+        Object.values(filteredCustomerSituacaoMap).forEach(situacao => {
+          if (situacao === 'paid') paidCount++;
+          else if (situacao === 'overdue') overdueCount++;
+        });
+        noContractCount = 0; // Doesn't apply when filtering by contract fields
+      } else {
+        // No contract filter: calculate from all contracts, respecting UF filter
+        const allCustomersWithContracts = new Set(Object.keys(contractsByCustomer));
+        
+        // For UF filter, we need to count customers in that UF
+        if (filters.uf) {
+          // Get customers in the UF that have contracts
+          const { data: customersInUf } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('uf', filters.uf);
+          
+          const customerIdsInUf = new Set((customersInUf || []).map(c => c.id));
+          
+          // Count situações only for customers in the filtered UF
+          Object.entries(customerSituacaoMap).forEach(([customerId, situacao]) => {
+            if (customerIdsInUf.has(customerId)) {
+              if (situacao === 'paid') paidCount++;
+              else if (situacao === 'overdue') overdueCount++;
+            }
+          });
+          
+          // Customers in UF without contracts
+          noContractCount = (totalFilteredCustomers || 0) - 
+            [...customerIdsInUf].filter(id => allCustomersWithContracts.has(id)).length;
+        } else {
+          // No filters at all: use global counts
+          Object.values(customerSituacaoMap).forEach(situacao => {
+            if (situacao === 'paid') paidCount++;
+            else if (situacao === 'overdue') overdueCount++;
+          });
+          
+          const { count: globalTotalCustomers } = await supabase
+            .from('customers')
+            .select('*', { count: 'exact', head: true });
+          
+          noContractCount = (globalTotalCustomers || 0) - allCustomersWithContracts.size;
+        }
+      }
 
       setStats({
-        total: totalCustomers || 0,
+        total: totalFilteredCustomers || 0,
         paid: paidCount,
         overdue: overdueCount,
         noContract: noContractCount,
