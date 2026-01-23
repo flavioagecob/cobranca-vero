@@ -1,9 +1,6 @@
-import { Search, X, CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import {
   Select,
   SelectContent,
@@ -11,12 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
 import type { InvoiceFilters as Filters } from '@/types/invoice';
 
 interface InvoiceFiltersProps {
@@ -59,33 +50,17 @@ export function InvoiceFilters({ filters, onFiltersChange, safraOptions, parcela
     });
   };
 
-  const handleDateFromChange = (date: Date | undefined) => {
-    onFiltersChange({ 
-      ...filters, 
-      dateFrom: date ? format(date, 'yyyy-MM-dd') : '' 
-    });
-  };
-
-  const handleDateToChange = (date: Date | undefined) => {
-    onFiltersChange({ 
-      ...filters, 
-      dateTo: date ? format(date, 'yyyy-MM-dd') : '' 
-    });
-  };
-
   const clearFilters = () => {
     onFiltersChange({ 
       search: '', 
       status: 'all', 
       overdueRange: 'all',
-      dateFrom: '',
-      dateTo: '',
       safra: 'all',
       parcela: 'all'
     });
   };
 
-  const hasFilters = filters.search || filters.status !== 'all' || filters.overdueRange !== 'all' || filters.dateFrom || filters.dateTo || filters.safra !== 'all' || filters.parcela !== 'all';
+  const hasFilters = filters.search || filters.status !== 'all' || filters.overdueRange !== 'all' || filters.safra !== 'all' || filters.parcela !== 'all';
 
   return (
     <div className="space-y-3">
@@ -107,22 +82,20 @@ export function InvoiceFilters({ filters, onFiltersChange, safraOptions, parcela
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos Status</SelectItem>
+            <SelectItem value="all">Status: Todos</SelectItem>
             <SelectItem value="pendente">Pendente</SelectItem>
             <SelectItem value="atrasado">Atrasado</SelectItem>
             <SelectItem value="pago">Pago</SelectItem>
-            <SelectItem value="negociado">Negociado</SelectItem>
-            <SelectItem value="cancelado">Cancelado</SelectItem>
           </SelectContent>
         </Select>
 
         {/* Overdue Range */}
         <Select value={filters.overdueRange} onValueChange={handleOverdueChange}>
-          <SelectTrigger className="w-full sm:w-40">
+          <SelectTrigger className="w-full sm:w-48">
             <SelectValue placeholder="Dias Atraso" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="all">Dias Atraso: Todos</SelectItem>
             <SelectItem value="1-15">1-15 dias</SelectItem>
             <SelectItem value="16-30">16-30 dias</SelectItem>
             <SelectItem value="31-60">31-60 dias</SelectItem>
@@ -136,7 +109,7 @@ export function InvoiceFilters({ filters, onFiltersChange, safraOptions, parcela
             <SelectValue placeholder="Safra" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todas Safras</SelectItem>
+            <SelectItem value="all">Safra: Todas</SelectItem>
             {safraOptions.map((safra) => (
               <SelectItem key={safra} value={safra}>
                 {safra}
@@ -148,11 +121,11 @@ export function InvoiceFilters({ filters, onFiltersChange, safraOptions, parcela
         {/* Parcela Filter */}
         {parcelaOptions.length > 0 && (
           <Select value={filters.parcela} onValueChange={handleParcelaChange}>
-            <SelectTrigger className="w-full sm:w-36">
+            <SelectTrigger className="w-full sm:w-44">
               <SelectValue placeholder="Parcela" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas Parcelas</SelectItem>
+              <SelectItem value="all">Parcela: Todas</SelectItem>
               {parcelaOptions.map((parcela) => (
                 <SelectItem key={parcela} value={parcela}>
                   {parcela}ª Parcela
@@ -161,70 +134,6 @@ export function InvoiceFilters({ filters, onFiltersChange, safraOptions, parcela
             </SelectContent>
           </Select>
         )}
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        {/* Date From */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">De:</span>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-[160px] justify-start text-left font-normal",
-                  !filters.dateFrom && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {filters.dateFrom 
-                  ? format(new Date(filters.dateFrom + 'T12:00:00'), "dd/MM/yyyy")
-                  : "Selecionar"
-                }
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={filters.dateFrom ? new Date(filters.dateFrom + 'T12:00:00') : undefined}
-                onSelect={handleDateFromChange}
-                locale={ptBR}
-                className="p-3 pointer-events-auto"
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        {/* Date To */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">Até:</span>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-[160px] justify-start text-left font-normal",
-                  !filters.dateTo && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {filters.dateTo 
-                  ? format(new Date(filters.dateTo + 'T12:00:00'), "dd/MM/yyyy")
-                  : "Selecionar"
-                }
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={filters.dateTo ? new Date(filters.dateTo + 'T12:00:00') : undefined}
-                onSelect={handleDateToChange}
-                locale={ptBR}
-                className="p-3 pointer-events-auto"
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
 
         {/* Clear Button */}
         {hasFilters && (

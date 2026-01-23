@@ -51,8 +51,6 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     search: '',
     status: 'all',
     overdueRange: 'all',
-    dateFrom: '',
-    dateTo: '',
     safra: 'all',
     parcela: 'all',
   });
@@ -92,14 +90,6 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
           created_at,
           customer:customers(id, nome, cpf_cnpj, telefone, email)
         `);
-
-      // Apply date range filter (server-side)
-      if (filters.dateFrom) {
-        query = query.gte('data_vencimento', filters.dateFrom);
-      }
-      if (filters.dateTo) {
-        query = query.lte('data_vencimento', filters.dateTo);
-      }
 
       // Apply safra filter (server-side)
       if (filters.safra && filters.safra !== 'all') {
@@ -243,14 +233,6 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
         
         if (filters.parcela && filters.parcela !== 'all') {
           filteredStats = filteredStats.filter(c => c.numero_fatura === filters.parcela);
-        }
-        
-        if (filters.dateFrom) {
-          filteredStats = filteredStats.filter(c => c.data_vencimento && c.data_vencimento >= filters.dateFrom);
-        }
-        
-        if (filters.dateTo) {
-          filteredStats = filteredStats.filter(c => c.data_vencimento && c.data_vencimento <= filters.dateTo);
         }
         
         // Calculate status for filtered contracts

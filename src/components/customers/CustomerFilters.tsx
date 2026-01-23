@@ -73,12 +73,12 @@ export function CustomerFilters({
       </div>
 
       <Select value={filters.status} onValueChange={handleStatusChange}>
-        <SelectTrigger className="w-full sm:w-40">
+        <SelectTrigger className="w-full sm:w-44">
           <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
           <SelectValue placeholder="Situação" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Todas Situações</SelectItem>
+          <SelectItem value="all">Situação: Todas</SelectItem>
           <SelectItem value="paid">
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -102,12 +102,12 @@ export function CustomerFilters({
 
       {parcelaOptions.length > 0 && (
         <Select value={filters.parcela || 'all'} onValueChange={handleParcelaChange}>
-          <SelectTrigger className="w-full sm:w-48">
+          <SelectTrigger className="w-full sm:w-52">
             <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
             <SelectValue placeholder="Parcela Vencida" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todas Parcelas</SelectItem>
+            <SelectItem value="all">Parcela: Todas</SelectItem>
             {parcelaOptions.map((parcela) => (
               <SelectItem key={parcela} value={parcela}>
                 {parcela}ª Parcela Vencida
@@ -119,11 +119,11 @@ export function CustomerFilters({
 
       {statusContratoOptions.length > 0 && (
         <Select value={filters.statusContrato || 'all'} onValueChange={handleStatusContratoChange}>
-          <SelectTrigger className="w-full sm:w-40">
+          <SelectTrigger className="w-full sm:w-52">
             <SelectValue placeholder="Status Contrato" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos Status</SelectItem>
+            <SelectItem value="all">Status Contrato: Todos</SelectItem>
             {statusContratoOptions.map((status) => (
               <SelectItem key={status} value={status}>
                 {status}
@@ -134,11 +134,11 @@ export function CustomerFilters({
       )}
 
       <Select value={filters.safra || 'all'} onValueChange={handleSafraChange}>
-        <SelectTrigger className="w-full sm:w-36">
+        <SelectTrigger className="w-full sm:w-40">
           <SelectValue placeholder="Safra" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Todas Safras</SelectItem>
+          <SelectItem value="all">Safra: Todas</SelectItem>
           {safraOptions.map((safra) => (
             <SelectItem key={safra} value={safra}>
               {safra}

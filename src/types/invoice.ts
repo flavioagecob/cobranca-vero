@@ -38,8 +38,6 @@ export interface InvoiceFilters {
   search: string;
   status: InvoiceStatus | 'all';
   overdueRange: 'all' | '1-15' | '16-30' | '31-60' | '60+';
-  dateFrom: string;
-  dateTo: string;
   safra: string;
   parcela: string;
 }
