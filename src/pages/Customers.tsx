@@ -3,7 +3,7 @@ import { CustomerFilters } from '@/components/customers/CustomerFilters';
 import { CustomerTable } from '@/components/customers/CustomerTable';
 import { CustomerPagination } from '@/components/customers/CustomerPagination';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, UserPlus, Download } from 'lucide-react';
+import { Users, CheckCircle, Clock, AlertTriangle, Download, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 
@@ -15,11 +15,17 @@ export default function Customers() {
     pagination,
     filters,
     safraOptions,
+    statusContratoOptions,
+    stats,
     sortState,
     setFilters,
     setPage,
     toggleSort,
   } = useCustomers(20);
+
+  const handleCardClick = (status: typeof filters.status) => {
+    setFilters({ ...filters, status });
+  };
 
   return (
     <div className="space-y-6">
@@ -44,48 +50,88 @@ export default function Customers() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+      {/* Stats Cards - Clickable */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card 
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            filters.status === 'all' ? 'ring-2 ring-primary' : ''
+          }`}
+          onClick={() => handleCardClick('all')}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total de Clientes</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{pagination.total}</div>
+            <div className="text-2xl font-bold">{stats.total}</div>
             <p className="text-xs text-muted-foreground">
               clientes cadastrados
             </p>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card 
+          className={`cursor-pointer transition-all hover:shadow-md border-emerald-500/30 ${
+            filters.status === 'paid' ? 'ring-2 ring-emerald-500' : ''
+          }`}
+          onClick={() => handleCardClick('paid')}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Filtro Atual</CardTitle>
+            <CardTitle className="text-sm font-medium text-emerald-600">Em Dia</CardTitle>
+            <CheckCircle className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{customers.length}</div>
+            <div className="text-2xl font-bold text-emerald-600">{stats.paid}</div>
             <p className="text-xs text-muted-foreground">
-              clientes nesta página
+              sem faturas pendentes
             </p>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card 
+          className={`cursor-pointer transition-all hover:shadow-md border-amber-500/30 ${
+            filters.status === 'pending' ? 'ring-2 ring-amber-500' : ''
+          }`}
+          onClick={() => handleCardClick('pending')}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Páginas</CardTitle>
+            <CardTitle className="text-sm font-medium text-amber-600">Com Pendências</CardTitle>
+            <Clock className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {pagination.page} / {Math.max(1, Math.ceil(pagination.total / pagination.pageSize))}
-            </div>
+            <div className="text-2xl font-bold text-amber-600">{stats.pending}</div>
             <p className="text-xs text-muted-foreground">
-              {pagination.pageSize} por página
+              faturas a vencer
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className={`cursor-pointer transition-all hover:shadow-md border-destructive/30 ${
+            filters.status === 'overdue' ? 'ring-2 ring-destructive' : ''
+          }`}
+          onClick={() => handleCardClick('overdue')}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-destructive">Em Atraso</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">{stats.overdue}</div>
+            <p className="text-xs text-muted-foreground">
+              faturas vencidas
             </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Filters */}
-      <CustomerFilters filters={filters} onFiltersChange={setFilters} safraOptions={safraOptions} />
+      <CustomerFilters 
+        filters={filters} 
+        onFiltersChange={setFilters} 
+        safraOptions={safraOptions}
+        statusContratoOptions={statusContratoOptions}
+      />
 
       {/* Error State */}
       {error && (

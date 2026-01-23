@@ -56,19 +56,32 @@ export interface CustomerWithDetails extends Customer {
   total_contracts?: number;
 }
 
+// Situação do cliente baseada em faturas
+export type CustomerSituacao = 'paid' | 'pending' | 'overdue';
+
 // Extended customer with operator summary for list view
 export interface CustomerWithOperatorSummary extends Customer {
   contracts_count: number;
   total_valor_pendente: number;
   status_contrato: string | null;
   proxima_data_vencimento: string | null;
+  situacao: CustomerSituacao;
+}
+
+// Customer statistics for dashboard cards
+export interface CustomerStats {
+  total: number;
+  paid: number;      // Clientes em dia (todas faturas pagas)
+  pending: number;   // Clientes com pendências (faturas a vencer)
+  overdue: number;   // Clientes em atraso (faturas vencidas)
 }
 
 export interface CustomerFilters {
   search: string;
   uf: string;
-  status: 'all' | 'active' | 'inactive' | 'pending' | 'overdue' | 'no_contract';
+  status: 'all' | 'paid' | 'pending' | 'overdue';
   safra: string;
+  statusContrato: string;
 }
 
 export interface PaginationState {
@@ -85,3 +98,19 @@ export interface CustomerSortState {
   field: CustomerSortField;
   direction: SortDirection;
 }
+
+// Situação configuration
+export const CUSTOMER_SITUACAO_CONFIG: Record<CustomerSituacao, { label: string; className: string }> = {
+  paid: {
+    label: 'Em Dia',
+    className: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  },
+  pending: {
+    label: 'Pendente',
+    className: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  },
+  overdue: {
+    label: 'Em Atraso',
+    className: 'bg-destructive/10 text-destructive border-destructive/20',
+  },
+};
