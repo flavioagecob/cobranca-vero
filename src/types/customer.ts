@@ -28,7 +28,7 @@ export interface SalesBase {
 
 export interface OperatorContract {
   id: string;
-  customer_id: string;
+  customer_id: string | null;
   sales_base_id: string | null;
   id_contrato: string;
   numero_contrato_operadora: string | null;
@@ -45,8 +45,8 @@ export interface OperatorContract {
   mes_safra_cadastro: string | null;
   mes_safra_vencimento: string | null;
   import_batch_id: string | null;
-  raw_data: Record<string, unknown> | null;
-  created_at: string;
+  raw_data: unknown;
+  created_at: string | null;
 }
 
 export interface CustomerWithDetails extends Customer {

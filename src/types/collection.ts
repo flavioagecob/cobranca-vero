@@ -1,6 +1,11 @@
-export type AttemptChannel = 'telefone' | 'whatsapp' | 'email' | 'sms' | 'presencial';
-export type AttemptResult = 'contato_efetivo' | 'sem_contato' | 'numero_invalido' | 'caixa_postal' | 'recado' | 'ocupado';
-export type PromiseStatus = 'pendente' | 'cumprida' | 'quebrada' | 'cancelada';
+// Channel types - matching Supabase enum collection_channel
+export type AttemptChannel = 'whatsapp' | 'telefone' | 'email' | 'sms';
+
+// Status types - matching Supabase enum attempt_status
+export type AttemptResult = 'sucesso' | 'sem_resposta' | 'numero_invalido' | 'recusado' | 'caixa_postal';
+
+// Promise status - matching Supabase enum promise_status
+export type PromiseStatus = 'pendente' | 'cumprida' | 'quebrada';
 
 // Interfaces aligned with Supabase table structure
 export interface CollectionAttempt {
@@ -51,29 +56,28 @@ export interface MessageTemplate {
   ativo: boolean;
 }
 
-// Channel configurations
+// Channel configurations - matching Supabase enum
 export const CHANNEL_CONFIG: Record<AttemptChannel, { label: string; icon: string; color: string }> = {
   telefone: { label: 'Telefone', icon: 'Phone', color: 'text-blue-600' },
   whatsapp: { label: 'WhatsApp', icon: 'MessageCircle', color: 'text-emerald-600' },
   email: { label: 'E-mail', icon: 'Mail', color: 'text-amber-600' },
   sms: { label: 'SMS', icon: 'MessageSquare', color: 'text-purple-600' },
-  presencial: { label: 'Presencial', icon: 'User', color: 'text-muted-foreground' },
 };
 
+// Result configurations - matching Supabase enum attempt_status
 export const RESULT_CONFIG: Record<AttemptResult, { label: string; color: string }> = {
-  contato_efetivo: { label: 'Contato Efetivo', color: 'bg-emerald-500/10 text-emerald-600' },
-  sem_contato: { label: 'Sem Contato', color: 'bg-amber-500/10 text-amber-600' },
+  sucesso: { label: 'Sucesso', color: 'bg-emerald-500/10 text-emerald-600' },
+  sem_resposta: { label: 'Sem Resposta', color: 'bg-amber-500/10 text-amber-600' },
   numero_invalido: { label: 'Número Inválido', color: 'bg-destructive/10 text-destructive' },
+  recusado: { label: 'Recusado', color: 'bg-destructive/10 text-destructive' },
   caixa_postal: { label: 'Caixa Postal', color: 'bg-muted text-muted-foreground' },
-  recado: { label: 'Recado', color: 'bg-blue-500/10 text-blue-600' },
-  ocupado: { label: 'Ocupado', color: 'bg-amber-500/10 text-amber-600' },
 };
 
+// Promise status configurations - matching Supabase enum
 export const PROMISE_STATUS_CONFIG: Record<PromiseStatus, { label: string; color: string }> = {
   pendente: { label: 'Pendente', color: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
   cumprida: { label: 'Cumprida', color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
   quebrada: { label: 'Quebrada', color: 'bg-destructive/10 text-destructive border-destructive/20' },
-  cancelada: { label: 'Cancelada', color: 'bg-muted text-muted-foreground border-border' },
 };
 
 // Simplified message templates - only first name, masked CPF, and value (no payment conditions)

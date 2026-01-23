@@ -29,11 +29,10 @@ export function useReconciliation(): UseReconciliationReturn {
     pendentes: 0,
     resolvidos: 0,
     byType: {
-      CONTRATO_SEM_CLIENTE: 0,
-      CLIENTE_SEM_CONTRATO: 0,
-      CONTRATO_SEM_MATCH_OS: 0,
-      MULTIPLOS_MATCHES: 0,
-      DADOS_DIVERGENTES: 0
+      cliente_sem_contrato: 0,
+      contrato_sem_venda: 0,
+      valor_divergente: 0,
+      dados_incorretos: 0
     }
   });
   const [filters, setFilters] = useState<ReconciliationFilters>({
@@ -51,7 +50,7 @@ export function useReconciliation(): UseReconciliationReturn {
         .from('reconciliation_issues')
         .select(`
           *,
-          sales_base:os_id (
+          sales_base:sales_base_id (
             os,
             produto,
             plano,
@@ -60,7 +59,7 @@ export function useReconciliation(): UseReconciliationReturn {
             vendedor,
             customer:customer_id (nome, cpf_cnpj)
           ),
-          operator_contract:contract_id (
+          operator_contract:operator_contract_id (
             id_contrato,
             numero_contrato_operadora,
             status_operadora,
@@ -73,7 +72,7 @@ export function useReconciliation(): UseReconciliationReturn {
         .order('created_at', { ascending: false });
 
       if (filters.issueType !== 'all') {
-        query = query.eq('issue_type', filters.issueType);
+        query = query.eq('tipo', filters.issueType);
       }
 
       if (filters.status !== 'all') {
@@ -105,21 +104,21 @@ export function useReconciliation(): UseReconciliationReturn {
         });
       }
 
-      setIssues(filteredData as ReconciliationIssue[]);
+      setIssues((filteredData || []) as unknown as ReconciliationIssue[]);
 
       // Calculate stats
       const allIssues = data || [];
       const byType: Record<IssueType, number> = {
-        CONTRATO_SEM_CLIENTE: 0,
-        CLIENTE_SEM_CONTRATO: 0,
-        CONTRATO_SEM_MATCH_OS: 0,
-        MULTIPLOS_MATCHES: 0,
-        DADOS_DIVERGENTES: 0
+        cliente_sem_contrato: 0,
+        contrato_sem_venda: 0,
+        valor_divergente: 0,
+        dados_incorretos: 0
       };
 
       allIssues.forEach((issue: any) => {
-        if (byType[issue.issue_type as IssueType] !== undefined) {
-          byType[issue.issue_type as IssueType]++;
+        const issueType = issue.tipo || issue.issue_type;
+        if (byType[issueType as IssueType] !== undefined) {
+          byType[issueType as IssueType]++;
         }
       });
 
@@ -152,7 +151,7 @@ export function useReconciliation(): UseReconciliationReturn {
           status: 'RESOLVIDO',
           resolved_at: new Date().toISOString(),
           resolved_by: user?.id || null,
-          resolution_notes: notes
+          descricao: notes
         })
         .eq('id', issueId);
 
@@ -220,9 +219,9 @@ export function useReconciliation(): UseReconciliationReturn {
       // Create issues for orphan contracts
       orphanContracts?.forEach(contract => {
         issuesFound.push({
-          issue_type: 'CONTRATO_SEM_CLIENTE',
-          contract_id: contract.id,
-          details: { id_contrato: contract.id_contrato },
+          tipo: 'contrato_sem_venda',
+          operator_contract_id: contract.id,
+          descricao: `Contrato ${contract.id_contrato} sem cliente vinculado`,
           status: 'PENDENTE'
         });
       });
@@ -231,10 +230,10 @@ export function useReconciliation(): UseReconciliationReturn {
       salesWithoutContracts?.forEach((sale: any) => {
         if (sale.customer?.operator_contracts?.length === 0) {
           issuesFound.push({
-            issue_type: 'CLIENTE_SEM_CONTRATO',
-            os_id: sale.id,
+            tipo: 'cliente_sem_contrato',
+            sales_base_id: sale.id,
             customer_id: sale.customer_id,
-            details: { os: sale.os },
+            descricao: `OS ${sale.os} sem contrato na operadora`,
             status: 'PENDENTE'
           });
         }
@@ -247,9 +246,9 @@ export function useReconciliation(): UseReconciliationReturn {
           const { data: existing } = await supabase
             .from('reconciliation_issues')
             .select('id')
-            .eq('issue_type', issue.issue_type)
+            .eq('tipo', issue.tipo)
             .eq('status', 'PENDENTE')
-            .or(`os_id.eq.${issue.os_id || 'null'},contract_id.eq.${issue.contract_id || 'null'}`)
+            .or(`sales_base_id.eq.${issue.sales_base_id || 'null'},operator_contract_id.eq.${issue.operator_contract_id || 'null'}`)
             .maybeSingle();
 
           if (!existing) {

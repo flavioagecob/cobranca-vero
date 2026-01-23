@@ -319,7 +319,14 @@ export const useCollection = (): UseCollectionReturn => {
     try {
       const { error } = await supabase
         .from('collection_attempts')
-        .insert(newAttempt);
+        .insert({
+          customer_id: newAttempt.customer_id,
+          invoice_id: newAttempt.invoice_id,
+          collector_id: newAttempt.collector_id,
+          channel: newAttempt.channel,
+          status: newAttempt.status,
+          notes: newAttempt.notes,
+        });
 
       if (error) {
         console.error('Supabase insert error:', error);
@@ -356,7 +363,13 @@ export const useCollection = (): UseCollectionReturn => {
     try {
       const { error } = await supabase
         .from('payment_promises')
-        .insert(newPromise);
+        .insert({
+          invoice_id: newPromise.invoice_id,
+          collector_id: newPromise.collector_id,
+          valor_prometido: newPromise.valor_prometido,
+          data_prometida: newPromise.data_prometida,
+          status: 'pendente' as const,
+        });
 
       if (error) {
         console.error('Supabase insert error:', error);
@@ -379,7 +392,7 @@ export const useCollection = (): UseCollectionReturn => {
     }
   }, [user, selectedCustomer, fetchPromises]);
 
-  const updatePromiseStatus = useCallback(async (id: string, status: PromiseStatus) => {
+  const updatePromiseStatus = useCallback(async (id: string, status: 'pendente' | 'cumprida' | 'quebrada') => {
     try {
       const { error } = await supabase
         .from('payment_promises')

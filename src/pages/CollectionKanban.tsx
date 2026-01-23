@@ -70,7 +70,7 @@ export default function CollectionKanban() {
     fetchPromises();
   }, [fetchPromises]);
 
-  const updateStatus = async (id: string, status: PromiseStatus) => {
+  const updateStatus = async (id: string, status: 'pendente' | 'cumprida' | 'quebrada') => {
     try {
       const { error } = await supabase
         .from('payment_promises')

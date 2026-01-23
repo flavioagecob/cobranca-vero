@@ -25,7 +25,7 @@ import {
   Unlink,
   Copy
 } from "lucide-react";
-import { ReconciliationIssue, ISSUE_TYPE_CONFIG, ISSUE_STATUS_CONFIG, IssueType } from "@/types/reconciliation";
+import { ReconciliationIssue, ISSUE_TYPE_CONFIG, ISSUE_STATUS_CONFIG } from "@/types/reconciliation";
 import { formatCurrency, formatDate, formatCpfCnpj } from "@/lib/formatters";
 
 interface IssueCardProps {
@@ -39,7 +39,8 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   FileX,
   Unlink,
   Copy,
-  AlertTriangle
+  AlertTriangle,
+  AlertCircle: AlertTriangle // fallback
 };
 
 export function IssueCard({ issue, onResolve, onLink }: IssueCardProps) {
@@ -47,9 +48,10 @@ export function IssueCard({ issue, onResolve, onLink }: IssueCardProps) {
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const typeConfig = ISSUE_TYPE_CONFIG[issue.issue_type];
-  const statusConfig = ISSUE_STATUS_CONFIG[issue.status];
-  const Icon = iconMap[typeConfig.icon] || AlertTriangle;
+  const issueType = issue.tipo || issue.issue_type;
+  const typeConfig = issueType ? ISSUE_TYPE_CONFIG[issueType] : null;
+  const statusConfig = issue.status ? ISSUE_STATUS_CONFIG[issue.status as 'PENDENTE' | 'RESOLVIDO'] : ISSUE_STATUS_CONFIG.PENDENTE;
+  const Icon = typeConfig?.icon ? (iconMap[typeConfig.icon] || AlertTriangle) : AlertTriangle;
 
   const handleResolve = async () => {
     setIsSubmitting(true);
@@ -72,16 +74,16 @@ export function IssueCard({ issue, onResolve, onLink }: IssueCardProps) {
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
-            <div className={`p-2 rounded-lg ${typeConfig.color}`}>
+            <div className={`p-2 rounded-lg ${typeConfig?.color || 'bg-muted'}`}>
               <Icon className="h-4 w-4" />
             </div>
             <div>
-              <CardTitle className="text-base">{typeConfig.label}</CardTitle>
-              <p className="text-xs text-muted-foreground">{typeConfig.description}</p>
+              <CardTitle className="text-base">{typeConfig?.label || 'Divergência'}</CardTitle>
+              <p className="text-xs text-muted-foreground">{typeConfig?.description || issue.descricao}</p>
             </div>
           </div>
-          <Badge className={statusConfig.color} variant="outline">
-            {statusConfig.label}
+          <Badge className={statusConfig?.color || ''} variant="outline">
+            {statusConfig?.label || issue.status}
           </Badge>
         </div>
       </CardHeader>
@@ -181,10 +183,10 @@ export function IssueCard({ issue, onResolve, onLink }: IssueCardProps) {
           </div>
         )}
 
-        {/* Details */}
-        {issue.details && Object.keys(issue.details).length > 0 && (
-          <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded font-mono">
-            {JSON.stringify(issue.details, null, 2)}
+        {/* Description */}
+        {issue.descricao && (
+          <div className="text-sm text-muted-foreground bg-muted/30 p-2 rounded">
+            {issue.descricao}
           </div>
         )}
 
@@ -194,9 +196,6 @@ export function IssueCard({ issue, onResolve, onLink }: IssueCardProps) {
             <CheckCircle className="h-4 w-4 mt-0.5" />
             <div className="text-sm">
               <p className="font-medium">Resolvido em {formatDate(issue.resolved_at || '')}</p>
-              {issue.resolution_notes && (
-                <p className="mt-1 text-muted-foreground">{issue.resolution_notes}</p>
-              )}
             </div>
           </div>
         )}
@@ -234,17 +233,6 @@ export function IssueCard({ issue, onResolve, onLink }: IssueCardProps) {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-
-            {issue.issue_type === 'CONTRATO_SEM_MATCH_OS' && issue.os_id && issue.contract_id && onLink && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onLink(issue.id, issue.os_id!, issue.contract_id!)}
-              >
-                <Link className="h-4 w-4 mr-2" />
-                Vincular
-              </Button>
-            )}
           </div>
         )}
 
