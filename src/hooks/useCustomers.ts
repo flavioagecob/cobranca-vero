@@ -121,11 +121,30 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         contractsByCustomer[contract.customer_id]!.push(contract);
       });
 
-      // Calculate situação for each customer
+      // Calculate situação for each customer - CONSIDERING parcela/safra filters
+      // This map determines the situação displayed in the TABLE based on active filters
       const customerSituacaoMap: Record<string, CustomerSituacao> = {};
       Object.entries(contractsByCustomer).forEach(([customerId, contracts]) => {
-        const hasContracts = contracts!.length > 0;
-        const hasOverdueInvoices = contracts!.some(c => {
+        // Apply filters to determine situação - when filters are active,
+        // situação should reflect only the filtered contracts
+        let relevantContracts = contracts!;
+        
+        if (filters.parcela) {
+          relevantContracts = relevantContracts.filter(c => c.numero_fatura === filters.parcela);
+        }
+        
+        if (filters.safra) {
+          relevantContracts = relevantContracts.filter(c => c.mes_safra_cadastro === filters.safra);
+        }
+        
+        if (filters.statusContrato) {
+          relevantContracts = relevantContracts.filter(
+            c => c.status_contrato?.toLowerCase() === filters.statusContrato.toLowerCase()
+          );
+        }
+        
+        const hasContracts = relevantContracts.length > 0;
+        const hasOverdueInvoices = relevantContracts.some(c => {
           if (c.data_pagamento !== null) return false;
           if (!c.data_vencimento) return false;
           return c.data_vencimento < todayStr;
@@ -296,16 +315,31 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
 
       if (customerIds.length > 0) {
         customerIds.forEach(customerId => {
-          const customerContracts = contractsByCustomer[customerId] || [];
+          const allCustomerContracts = contractsByCustomer[customerId] || [];
           
-          let contractsCount = 0;
+          // Apply filters to calculate summary based on filtered contracts
+          let relevantContracts = allCustomerContracts;
+          
+          if (filters.parcela) {
+            relevantContracts = relevantContracts.filter(c => c.numero_fatura === filters.parcela);
+          }
+          
+          if (filters.safra) {
+            relevantContracts = relevantContracts.filter(c => c.mes_safra_cadastro === filters.safra);
+          }
+          
+          if (filters.statusContrato) {
+            relevantContracts = relevantContracts.filter(
+              c => c.status_contrato?.toLowerCase() === filters.statusContrato.toLowerCase()
+            );
+          }
+          
+          let contractsCount = relevantContracts.length;
           let totalValorPendente = 0;
           let statusContrato: string | null = null;
           let proximaDataVencimento: string | null = null;
 
-          customerContracts.forEach((contract) => {
-            contractsCount++;
-
+          relevantContracts.forEach((contract) => {
             // Sum pending values (fatura sem data de pagamento = pendente)
             const isPending = contract.data_pagamento === null;
             if (isPending && contract.valor_fatura) {

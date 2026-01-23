@@ -77,7 +77,7 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     setError(null);
 
     try {
-      // Build query from operator_contracts table
+      // Fetch ALL data first (without pagination) to apply client-side filters correctly
       let query = supabase
         .from('operator_contracts')
         .select(`
@@ -91,9 +91,9 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
           mes_safra_cadastro,
           created_at,
           customer:customers(id, nome, cpf_cnpj, telefone, email)
-        `, { count: 'exact' });
+        `);
 
-      // Apply date range filter
+      // Apply date range filter (server-side)
       if (filters.dateFrom) {
         query = query.gte('data_vencimento', filters.dateFrom);
       }
@@ -101,25 +101,19 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
         query = query.lte('data_vencimento', filters.dateTo);
       }
 
-      // Apply safra filter
+      // Apply safra filter (server-side)
       if (filters.safra && filters.safra !== 'all') {
         query = query.eq('mes_safra_cadastro', filters.safra);
       }
 
-      // Apply parcela filter
+      // Apply parcela filter (server-side)
       if (filters.parcela && filters.parcela !== 'all') {
         query = query.eq('numero_fatura', filters.parcela);
       }
 
-      // Apply pagination
-      const from = (pagination.page - 1) * pagination.pageSize;
-      const to = from + pagination.pageSize - 1;
+      query = query.order('data_vencimento', { ascending: true });
 
-      query = query
-        .order('data_vencimento', { ascending: true })
-        .range(from, to);
-
-      const { data, error: queryError, count } = await query;
+      const { data, error: queryError } = await query;
 
       if (queryError) throw queryError;
 
@@ -206,8 +200,15 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
         }
       });
 
-      setInvoices(processedInvoices);
-      setPagination((prev) => ({ ...prev, total: count || 0 }));
+      // Update total count AFTER all client-side filters
+      const totalFiltered = processedInvoices.length;
+      
+      // Apply pagination AFTER all filters
+      const from = (pagination.page - 1) * pagination.pageSize;
+      const paginatedInvoices = processedInvoices.slice(from, from + pagination.pageSize);
+
+      setInvoices(paginatedInvoices);
+      setPagination((prev) => ({ ...prev, total: totalFiltered }));
 
       // Fetch unique safras and parcelas for filter options
       const { data: optionsData } = await supabase
