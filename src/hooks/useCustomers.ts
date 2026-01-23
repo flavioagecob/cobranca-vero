@@ -19,6 +19,7 @@ interface UseCustomersReturn {
   filters: CustomerFilters;
   safraOptions: string[];
   statusContratoOptions: string[];
+  parcelaOptions: string[];
   stats: CustomerStats;
   sortState: CustomerSortState;
   setFilters: (filters: CustomerFilters) => void;
@@ -55,13 +56,14 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
   });
   const [filters, setFilters] = useState<CustomerFilters>({
     search: '',
-    uf: '',
+    parcela: '',
     status: 'all',
     safra: '',
     statusContrato: '',
   });
   const [safraOptions, setSafraOptions] = useState<string[]>([]);
   const [statusContratoOptions, setStatusContratoOptions] = useState<string[]>([]);
+  const [parcelaOptions, setParcelaOptions] = useState<string[]>([]);
   const [stats, setStats] = useState<CustomerStats>({
     total: 0,
     paid: 0,
@@ -85,7 +87,7 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
       // Fetch all contracts for calculating stats and situação
       const { data: allContracts } = await supabase
         .from('operator_contracts')
-        .select('customer_id, status_contrato, valor_fatura, data_vencimento, data_pagamento, mes_safra_cadastro');
+        .select('customer_id, status_contrato, valor_fatura, data_vencimento, data_pagamento, mes_safra_cadastro, numero_fatura');
 
       // Extract unique safras and status_contrato for filters
       const uniqueSafras = [...new Set((allContracts || [])
@@ -97,6 +99,18 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         .map(c => c.status_contrato)
         .filter(Boolean))] as string[];
       setStatusContratoOptions(uniqueStatusContrato.sort());
+
+      // Extract unique parcelas (numero_fatura) for filters
+      const uniqueParcelas = [...new Set((allContracts || [])
+        .map(c => c.numero_fatura)
+        .filter(Boolean))] as string[];
+      // Sort numerically if possible
+      setParcelaOptions(uniqueParcelas.sort((a, b) => {
+        const numA = parseInt(a);
+        const numB = parseInt(b);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return a.localeCompare(b);
+      }));
 
       // Group contracts by customer for situação calculation
       const contractsByCustomer: Record<string, typeof allContracts> = {};
@@ -153,6 +167,27 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         }
       }
 
+      // Get customer IDs that match the parcela vencida filter if needed
+      let customerIdsWithParcelaVencida: string[] | null = null;
+      
+      if (filters.parcela) {
+        customerIdsWithParcelaVencida = [...new Set((allContracts || [])
+          .filter(c => 
+            c.numero_fatura === filters.parcela &&
+            c.data_pagamento === null &&
+            c.data_vencimento && c.data_vencimento < todayStr
+          )
+          .map(c => c.customer_id))];
+        
+        if (customerIdsWithParcelaVencida.length === 0) {
+          setCustomers([]);
+          setPagination((prev) => ({ ...prev, total: 0 }));
+          setStats({ total: 0, paid: 0, overdue: 0, noContract: 0 });
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // Get customer IDs that match the situação filter if needed
       let customerIdsWithSituacao: string[] | null = null;
       let filteringNoContract = false;
@@ -195,6 +230,14 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
           combinedIds = customerIdsWithStatusContrato;
         }
       }
+
+      if (customerIdsWithParcelaVencida) {
+        if (combinedIds) {
+          combinedIds = combinedIds.filter(id => customerIdsWithParcelaVencida!.includes(id));
+        } else {
+          combinedIds = customerIdsWithParcelaVencida;
+        }
+      }
       
       if (customerIdsWithSituacao) {
         if (combinedIds) {
@@ -222,11 +265,7 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         query = query.or(`nome.ilike.${searchTerm},cpf_cnpj.ilike.${searchTerm},email.ilike.${searchTerm},telefone.ilike.${searchTerm}`);
       }
 
-      // Apply UF filter
-      if (filters.uf) {
-        query = query.eq('uf', filters.uf);
-      }
-
+      // No UF filter anymore
       // Apply Supabase-level sorting for direct fields
       if (['nome', 'cpf_cnpj'].includes(sortState.field)) {
         query = query.order(sortState.field, { ascending: sortState.direction === 'asc' });
@@ -369,17 +408,13 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
       // Get customer IDs from filtered contracts
       const customersWithFilteredContracts = new Set(Object.keys(filteredContractsByCustomer));
 
-      // Build stats query with UF filter
+      // Build stats query
       let statsQuery = supabase
         .from('customers')
         .select('*', { count: 'exact', head: true });
 
-      if (filters.uf) {
-        statsQuery = statsQuery.eq('uf', filters.uf);
-      }
-
-      // If filtering by safra or statusContrato, limit to customers with matching contracts
-      const hasContractFilter = filters.safra || filters.statusContrato;
+      // If filtering by safra, statusContrato, or parcela, limit to customers with matching contracts
+      const hasContractFilter = filters.safra || filters.statusContrato || filters.parcela;
       
       if (hasContractFilter) {
         if (customersWithFilteredContracts.size > 0) {
@@ -410,43 +445,19 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
         });
         noContractCount = 0; // Doesn't apply when filtering by contract fields
       } else {
-        // No contract filter: calculate from all contracts, respecting UF filter
+        // No contract filter: use global counts
         const allCustomersWithContracts = new Set(Object.keys(contractsByCustomer));
         
-        // For UF filter, we need to count customers in that UF
-        if (filters.uf) {
-          // Get customers in the UF that have contracts
-          const { data: customersInUf } = await supabase
-            .from('customers')
-            .select('id')
-            .eq('uf', filters.uf);
-          
-          const customerIdsInUf = new Set((customersInUf || []).map(c => c.id));
-          
-          // Count situações only for customers in the filtered UF
-          Object.entries(customerSituacaoMap).forEach(([customerId, situacao]) => {
-            if (customerIdsInUf.has(customerId)) {
-              if (situacao === 'paid') paidCount++;
-              else if (situacao === 'overdue') overdueCount++;
-            }
-          });
-          
-          // Customers in UF without contracts
-          noContractCount = (totalFilteredCustomers || 0) - 
-            [...customerIdsInUf].filter(id => allCustomersWithContracts.has(id)).length;
-        } else {
-          // No filters at all: use global counts
-          Object.values(customerSituacaoMap).forEach(situacao => {
-            if (situacao === 'paid') paidCount++;
-            else if (situacao === 'overdue') overdueCount++;
-          });
-          
-          const { count: globalTotalCustomers } = await supabase
-            .from('customers')
-            .select('*', { count: 'exact', head: true });
-          
-          noContractCount = (globalTotalCustomers || 0) - allCustomersWithContracts.size;
-        }
+        Object.values(customerSituacaoMap).forEach(situacao => {
+          if (situacao === 'paid') paidCount++;
+          else if (situacao === 'overdue') overdueCount++;
+        });
+        
+        const { count: globalTotalCustomers } = await supabase
+          .from('customers')
+          .select('*', { count: 'exact', head: true });
+        
+        noContractCount = (globalTotalCustomers || 0) - allCustomersWithContracts.size;
       }
 
       setStats({
@@ -494,6 +505,7 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
     filters,
     safraOptions,
     statusContratoOptions,
+    parcelaOptions,
     stats,
     sortState,
     setFilters: handleSetFilters,

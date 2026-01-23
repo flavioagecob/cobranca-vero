@@ -16,6 +16,7 @@ export default function Customers() {
     filters,
     safraOptions,
     statusContratoOptions,
+    parcelaOptions,
     stats,
     sortState,
     setFilters,
@@ -131,6 +132,7 @@ export default function Customers() {
         onFiltersChange={setFilters} 
         safraOptions={safraOptions}
         statusContratoOptions={statusContratoOptions}
+        parcelaOptions={parcelaOptions}
       />
 
       {/* Error State */}

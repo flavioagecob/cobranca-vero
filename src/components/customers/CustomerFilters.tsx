@@ -1,4 +1,4 @@
-import { Search, X, Filter } from 'lucide-react';
+import { Search, X, Filter, Calendar } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { UF_LIST } from '@/lib/formatters';
 import type { CustomerFilters as Filters } from '@/types/customer';
 
 interface CustomerFiltersProps {
@@ -16,20 +15,22 @@ interface CustomerFiltersProps {
   onFiltersChange: (filters: Filters) => void;
   safraOptions: string[];
   statusContratoOptions: string[];
+  parcelaOptions: string[];
 }
 
 export function CustomerFilters({ 
   filters, 
   onFiltersChange, 
   safraOptions,
-  statusContratoOptions 
+  statusContratoOptions,
+  parcelaOptions
 }: CustomerFiltersProps) {
   const handleSearchChange = (value: string) => {
     onFiltersChange({ ...filters, search: value });
   };
 
-  const handleUfChange = (value: string) => {
-    onFiltersChange({ ...filters, uf: value === 'all' ? '' : value });
+  const handleParcelaChange = (value: string) => {
+    onFiltersChange({ ...filters, parcela: value === 'all' ? '' : value });
   };
 
   const handleStatusChange = (value: string) => {
@@ -54,10 +55,10 @@ export function CustomerFilters({
   };
 
   const clearFilters = () => {
-    onFiltersChange({ search: '', uf: '', status: 'all', safra: '', statusContrato: '' });
+    onFiltersChange({ search: '', parcela: '', status: 'all', safra: '', statusContrato: '' });
   };
 
-  const hasFilters = filters.search || filters.uf || filters.status !== 'all' || filters.safra || filters.statusContrato;
+  const hasFilters = filters.search || filters.parcela || filters.status !== 'all' || filters.safra || filters.statusContrato;
 
   return (
     <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
@@ -99,6 +100,23 @@ export function CustomerFilters({
         </SelectContent>
       </Select>
 
+      {parcelaOptions.length > 0 && (
+        <Select value={filters.parcela || 'all'} onValueChange={handleParcelaChange}>
+          <SelectTrigger className="w-full sm:w-48">
+            <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="Parcela Vencida" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas Parcelas</SelectItem>
+            {parcelaOptions.map((parcela) => (
+              <SelectItem key={parcela} value={parcela}>
+                {parcela}ª Parcela Vencida
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
       {statusContratoOptions.length > 0 && (
         <Select value={filters.statusContrato || 'all'} onValueChange={handleStatusContratoChange}>
           <SelectTrigger className="w-full sm:w-40">
@@ -124,20 +142,6 @@ export function CustomerFilters({
           {safraOptions.map((safra) => (
             <SelectItem key={safra} value={safra}>
               {safra}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={filters.uf || 'all'} onValueChange={handleUfChange}>
-        <SelectTrigger className="w-full sm:w-28">
-          <SelectValue placeholder="UF" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos UF</SelectItem>
-          {UF_LIST.map((uf) => (
-            <SelectItem key={uf} value={uf}>
-              {uf}
             </SelectItem>
           ))}
         </SelectContent>
