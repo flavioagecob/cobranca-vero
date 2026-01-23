@@ -64,10 +64,10 @@ export const useDashboardStats = (): UseDashboardStatsReturn => {
 
       if (customersError) throw customersError;
 
-      // Fetch operator contracts stats
+      // Fetch operator contracts stats - include id_contrato for unique counting
       const { data: contractsData, error: contractsError } = await supabase
         .from('operator_contracts')
-        .select('status_contrato, valor_fatura, data_vencimento, data_pagamento');
+        .select('id_contrato, status_contrato, valor_fatura, data_vencimento, data_pagamento');
 
       if (contractsError) throw contractsError;
 
@@ -79,33 +79,35 @@ export const useDashboardStats = (): UseDashboardStatsReturn => {
       const next7Days = new Date(today);
       next7Days.setDate(next7Days.getDate() + 7);
 
-      // Initialize counters
+      // Initialize counters for INVOICES (each row = one invoice/installment)
       let pendingValue = 0;
       let pendingCount = 0;
       let paidValue = 0;
       let paidCount = 0;
-      let enabledContracts = 0;
       let overdueCount = 0;
       let overdueValue = 0;
       let todayDueCount = 0;
       let todayDueValue = 0;
       let next7DaysCount = 0;
       let next7DaysValue = 0;
-      const contractsByStatus: Record<string, number> = {};
+
+      // Use Sets to track UNIQUE CONTRACTS by id_contrato
+      const uniqueContractsByStatus: Record<string, Set<string>> = {};
 
       (contractsData || []).forEach((contract) => {
-        // Count by status_contrato
-        const status = (contract.status_contrato || 'sem_status').toLowerCase();
-        contractsByStatus[status] = (contractsByStatus[status] || 0) + 1;
+        // Track unique contracts by status
+        const status = (contract.status_contrato || 'sem_status').toLowerCase().trim();
+        const idContrato = contract.id_contrato || 'unknown';
 
-        if (status === 'habilitado') {
-          enabledContracts++;
+        if (!uniqueContractsByStatus[status]) {
+          uniqueContractsByStatus[status] = new Set();
         }
+        uniqueContractsByStatus[status].add(idContrato);
 
+        // Invoice counting (each row = one invoice/installment)
         const isPaid = contract.data_pagamento !== null;
         const valor = contract.valor_fatura || 0;
 
-        // Paid vs pending invoices
         if (isPaid) {
           paidCount++;
           paidValue += valor;
@@ -115,27 +117,32 @@ export const useDashboardStats = (): UseDashboardStatsReturn => {
 
           // Check due dates (only for unpaid invoices)
           if (contract.data_vencimento) {
-            // Parse date correctly to avoid timezone issues
             const [year, month, day] = contract.data_vencimento.split('-').map(Number);
             const dueDate = new Date(year, month - 1, day);
             dueDate.setHours(0, 0, 0, 0);
 
             if (dueDate < today) {
-              // Overdue
               overdueCount++;
               overdueValue += valor;
             } else if (dueDate.getTime() === today.getTime()) {
-              // Due today
               todayDueCount++;
               todayDueValue += valor;
             } else if (dueDate > today && dueDate <= next7Days) {
-              // Due in next 7 days (excluding today)
               next7DaysCount++;
               next7DaysValue += valor;
             }
           }
         }
       });
+
+      // Convert Sets to counts for unique contracts
+      const contractsByStatus: Record<string, number> = {};
+      Object.entries(uniqueContractsByStatus).forEach(([status, set]) => {
+        contractsByStatus[status] = set.size;
+      });
+
+      // Count unique enabled contracts
+      const enabledContracts = uniqueContractsByStatus['habilitado']?.size || 0;
 
       setStats({
         totalCustomers: customersCount || 0,
