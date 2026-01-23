@@ -7,7 +7,7 @@ import {
   Clock,
   AlertTriangle
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -22,20 +22,28 @@ import { PROMISE_STATUS_CONFIG, type PaymentPromise, type PromiseStatus } from '
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 
+// Extended type for promises with joined customer data
+interface PromiseWithCustomer extends PaymentPromise {
+  customer?: { nome: string };
+}
+
 export default function CollectionKanban() {
-  const [promises, setPromises] = useState<(PaymentPromise & { customer?: { nome: string } })[]>([]);
+  const [promises, setPromises] = useState<PromiseWithCustomer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchPromises = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Payment promises are linked to invoices, get customer via invoice
       const { data, error } = await supabase
         .from('payment_promises')
         .select(`
           *,
-          customer:customers(nome)
+          invoice:operator_contracts(
+            customer:customers(nome)
+          )
         `)
-        .order('data_pagamento_previsto', { ascending: true });
+        .order('data_prometida', { ascending: true });
 
       if (error) {
         console.log('Payment promises table not available:', error.message);
@@ -43,7 +51,13 @@ export default function CollectionKanban() {
         return;
       }
 
-      setPromises(data || []);
+      // Transform data to extract customer from nested invoice
+      const transformedData = (data || []).map((item: any) => ({
+        ...item,
+        customer: item.invoice?.customer || undefined,
+      }));
+
+      setPromises(transformedData);
     } catch (err) {
       console.error('Error fetching promises:', err);
       setPromises([]);
@@ -60,7 +74,7 @@ export default function CollectionKanban() {
     try {
       const { error } = await supabase
         .from('payment_promises')
-        .update({ status, updated_at: new Date().toISOString() })
+        .update({ status })
         .eq('id', id);
 
       if (error) throw error;
@@ -85,7 +99,7 @@ export default function CollectionKanban() {
     if (promise.status !== 'pendente') return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const promiseDate = new Date(promise.data_pagamento_previsto);
+    const promiseDate = new Date(promise.data_prometida);
     promiseDate.setHours(0, 0, 0, 0);
     return promiseDate < today;
   };
@@ -180,7 +194,7 @@ export default function CollectionKanban() {
                       </div>
 
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Previsão: {formatDate(promise.data_pagamento_previsto)}</span>
+                        <span>Previsão: {formatDate(promise.data_prometida)}</span>
                         {isOverdue(promise) && (
                           <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-[10px]">
                             <AlertTriangle className="h-3 w-3 mr-1" />
@@ -188,12 +202,6 @@ export default function CollectionKanban() {
                           </Badge>
                         )}
                       </div>
-
-                      {promise.observacoes && (
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {promise.observacoes}
-                        </p>
-                      )}
                     </CardContent>
                   </Card>
                 ))}
