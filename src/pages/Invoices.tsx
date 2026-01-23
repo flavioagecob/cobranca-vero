@@ -17,6 +17,7 @@ export default function Invoices() {
     filters,
     stats,
     safraOptions,
+    parcelaOptions,
     sortState,
     setFilters,
     setPage,
@@ -31,6 +32,10 @@ export default function Invoices() {
     } catch (err) {
       toast.error('Erro ao atualizar status da fatura');
     }
+  };
+
+  const handleCardClick = (status: InvoiceStatus | 'all') => {
+    setFilters({ ...filters, status });
   };
 
   return (
@@ -56,10 +61,20 @@ export default function Invoices() {
       </div>
 
       {/* Stats Cards */}
-      <InvoiceStatsCards stats={stats} isLoading={isLoading} />
+      <InvoiceStatsCards 
+        stats={stats} 
+        isLoading={isLoading} 
+        currentFilter={filters.status}
+        onFilterChange={handleCardClick}
+      />
 
       {/* Filters */}
-      <InvoiceFilters filters={filters} onFiltersChange={setFilters} safraOptions={safraOptions} />
+      <InvoiceFilters 
+        filters={filters} 
+        onFiltersChange={setFilters} 
+        safraOptions={safraOptions} 
+        parcelaOptions={parcelaOptions}
+      />
 
       {/* Error State */}
       {error && (

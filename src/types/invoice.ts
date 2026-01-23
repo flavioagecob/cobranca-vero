@@ -41,6 +41,7 @@ export interface InvoiceFilters {
   dateFrom: string;
   dateTo: string;
   safra: string;
+  parcela: string;
 }
 
 export interface InvoiceStats {

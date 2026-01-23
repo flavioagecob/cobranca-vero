@@ -11,6 +11,7 @@ interface UseInvoicesReturn {
   filters: InvoiceFilters;
   stats: InvoiceStats;
   safraOptions: string[];
+  parcelaOptions: string[];
   sortState: InvoiceSortState;
   setFilters: (filters: InvoiceFilters) => void;
   setPage: (page: number) => void;
@@ -53,8 +54,10 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     dateFrom: '',
     dateTo: '',
     safra: 'all',
+    parcela: 'all',
   });
   const [safraOptions, setSafraOptions] = useState<string[]>([]);
+  const [parcelaOptions, setParcelaOptions] = useState<string[]>([]);
   const [sortState, setSortState] = useState<InvoiceSortState>({
     field: 'data_vencimento',
     direction: 'asc',
@@ -101,6 +104,11 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
       // Apply safra filter
       if (filters.safra && filters.safra !== 'all') {
         query = query.eq('mes_safra_cadastro', filters.safra);
+      }
+
+      // Apply parcela filter
+      if (filters.parcela && filters.parcela !== 'all') {
+        query = query.eq('numero_fatura', filters.parcela);
       }
 
       // Apply pagination
@@ -201,38 +209,81 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
       setInvoices(processedInvoices);
       setPagination((prev) => ({ ...prev, total: count || 0 }));
 
-      // Fetch unique safras for filter options
-      const { data: safrasData } = await supabase
+      // Fetch unique safras and parcelas for filter options
+      const { data: optionsData } = await supabase
         .from('operator_contracts')
-        .select('mes_safra_cadastro')
-        .not('mes_safra_cadastro', 'is', null);
+        .select('mes_safra_cadastro, numero_fatura');
 
-      if (safrasData) {
-        const uniqueSafras = [...new Set(safrasData.map(s => s.mes_safra_cadastro).filter(Boolean))] as string[];
+      if (optionsData) {
+        const uniqueSafras = [...new Set(optionsData.map(s => s.mes_safra_cadastro).filter(Boolean))] as string[];
         setSafraOptions(uniqueSafras.sort());
+        
+        const uniqueParcelas = [...new Set(optionsData.map(s => s.numero_fatura).filter(Boolean))] as string[];
+        setParcelaOptions(uniqueParcelas.sort((a, b) => {
+          const numA = parseInt(a);
+          const numB = parseInt(b);
+          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+          return a.localeCompare(b);
+        }));
       }
 
-      // Fetch all contracts for stats calculation
+      // Fetch all contracts for stats calculation - WITH filters applied
       const { data: statsData } = await supabase
         .from('operator_contracts')
-        .select('valor_fatura, data_vencimento, data_pagamento');
+        .select('valor_fatura, data_vencimento, data_pagamento, mes_safra_cadastro, numero_fatura');
 
       if (statsData) {
-        const contractsWithStatus = statsData.map((c) => ({
+        // Apply filters to stats data
+        let filteredStats = statsData;
+        
+        if (filters.safra && filters.safra !== 'all') {
+          filteredStats = filteredStats.filter(c => c.mes_safra_cadastro === filters.safra);
+        }
+        
+        if (filters.parcela && filters.parcela !== 'all') {
+          filteredStats = filteredStats.filter(c => c.numero_fatura === filters.parcela);
+        }
+        
+        if (filters.dateFrom) {
+          filteredStats = filteredStats.filter(c => c.data_vencimento && c.data_vencimento >= filters.dateFrom);
+        }
+        
+        if (filters.dateTo) {
+          filteredStats = filteredStats.filter(c => c.data_vencimento && c.data_vencimento <= filters.dateTo);
+        }
+        
+        // Calculate status for filtered contracts
+        const contractsWithStatus = filteredStats.map((c) => ({
           ...c,
           status: calculateStatus(c.data_pagamento, c.data_vencimento),
+          dias_atraso: calculateDaysOverdue(c.data_vencimento || ''),
         }));
+        
+        // Apply overdue range filter if active
+        let finalContracts = contractsWithStatus;
+        if (filters.overdueRange !== 'all') {
+          finalContracts = contractsWithStatus.filter((c) => {
+            const days = c.dias_atraso;
+            switch (filters.overdueRange) {
+              case '1-15': return days >= 1 && days <= 15;
+              case '16-30': return days >= 16 && days <= 30;
+              case '31-60': return days >= 31 && days <= 60;
+              case '60+': return days > 60;
+              default: return true;
+            }
+          });
+        }
 
         const calculatedStats: InvoiceStats = {
-          total: contractsWithStatus.length,
-          pendente: contractsWithStatus.filter((i) => i.status === 'pendente').length,
-          pago: contractsWithStatus.filter((i) => i.status === 'pago').length,
-          atrasado: contractsWithStatus.filter((i) => i.status === 'atrasado').length,
-          valorTotal: contractsWithStatus.reduce((sum, i) => sum + (i.valor_fatura || 0), 0),
-          valorPendente: contractsWithStatus
+          total: finalContracts.length,
+          pendente: finalContracts.filter((i) => i.status === 'pendente').length,
+          pago: finalContracts.filter((i) => i.status === 'pago').length,
+          atrasado: finalContracts.filter((i) => i.status === 'atrasado').length,
+          valorTotal: finalContracts.reduce((sum, i) => sum + (i.valor_fatura || 0), 0),
+          valorPendente: finalContracts
             .filter((i) => i.status === 'pendente' || i.status === 'atrasado')
             .reduce((sum, i) => sum + (i.valor_fatura || 0), 0),
-          valorAtrasado: contractsWithStatus
+          valorAtrasado: finalContracts
             .filter((i) => i.status === 'atrasado')
             .reduce((sum, i) => sum + (i.valor_fatura || 0), 0),
         };
@@ -298,6 +349,7 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     filters,
     stats,
     safraOptions,
+    parcelaOptions,
     sortState,
     setFilters,
     setPage,

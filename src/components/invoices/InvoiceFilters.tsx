@@ -23,9 +23,10 @@ interface InvoiceFiltersProps {
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
   safraOptions: string[];
+  parcelaOptions: string[];
 }
 
-export function InvoiceFilters({ filters, onFiltersChange, safraOptions }: InvoiceFiltersProps) {
+export function InvoiceFilters({ filters, onFiltersChange, safraOptions, parcelaOptions }: InvoiceFiltersProps) {
   const handleSearchChange = (value: string) => {
     onFiltersChange({ ...filters, search: value });
   };
@@ -51,6 +52,13 @@ export function InvoiceFilters({ filters, onFiltersChange, safraOptions }: Invoi
     });
   };
 
+  const handleParcelaChange = (value: string) => {
+    onFiltersChange({ 
+      ...filters, 
+      parcela: value
+    });
+  };
+
   const handleDateFromChange = (date: Date | undefined) => {
     onFiltersChange({ 
       ...filters, 
@@ -72,11 +80,12 @@ export function InvoiceFilters({ filters, onFiltersChange, safraOptions }: Invoi
       overdueRange: 'all',
       dateFrom: '',
       dateTo: '',
-      safra: 'all'
+      safra: 'all',
+      parcela: 'all'
     });
   };
 
-  const hasFilters = filters.search || filters.status !== 'all' || filters.overdueRange !== 'all' || filters.dateFrom || filters.dateTo || filters.safra !== 'all';
+  const hasFilters = filters.search || filters.status !== 'all' || filters.overdueRange !== 'all' || filters.dateFrom || filters.dateTo || filters.safra !== 'all' || filters.parcela !== 'all';
 
   return (
     <div className="space-y-3">
@@ -135,6 +144,23 @@ export function InvoiceFilters({ filters, onFiltersChange, safraOptions }: Invoi
             ))}
           </SelectContent>
         </Select>
+
+        {/* Parcela Filter */}
+        {parcelaOptions.length > 0 && (
+          <Select value={filters.parcela} onValueChange={handleParcelaChange}>
+            <SelectTrigger className="w-full sm:w-36">
+              <SelectValue placeholder="Parcela" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas Parcelas</SelectItem>
+              {parcelaOptions.map((parcela) => (
+                <SelectItem key={parcela} value={parcela}>
+                  {parcela}ª Parcela
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
