@@ -44,6 +44,8 @@ export interface CollectionQueueItem {
   priority_score: number;
   // Store first overdue invoice for attempts/promises
   first_invoice_id?: string;
+  // Indicates if customer has at least one collection attempt
+  has_attempt?: boolean;
 }
 
 export interface MessageTemplate {

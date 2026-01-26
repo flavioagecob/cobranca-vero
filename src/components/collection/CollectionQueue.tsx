@@ -1,4 +1,4 @@
-import { Users, Search } from 'lucide-react';
+import { Users, Search, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 import type { CollectionQueueItem } from '@/types/collection';
 import { useState } from 'react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface CollectionQueueProps {
   queue: CollectionQueueItem[];
@@ -78,9 +79,23 @@ export function CollectionQueue({
               >
                 <div className="flex flex-col items-start w-full gap-1">
                   <div className="flex items-center justify-between w-full">
-                    <span className="font-medium text-sm truncate max-w-[150px]">
-                      {item.customer_name}
-                    </span>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {item.has_attempt && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Cliente já cobrado</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      <span className="font-medium text-sm truncate max-w-[130px]">
+                        {item.customer_name}
+                      </span>
+                    </div>
                     {item.max_dias_atraso > 0 && (
                       <Badge 
                         variant="outline" 

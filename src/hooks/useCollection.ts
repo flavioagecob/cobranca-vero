@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { 
@@ -15,11 +15,19 @@ export interface CollectionFilters {
   parcela: string;
 }
 
+export interface CollectionStats {
+  totalNaFila: number;
+  cobradosHoje: number;
+  cobradosTotal: number;
+  valorTotalPendente: number;
+}
+
 interface UseCollectionReturn {
   queue: CollectionQueueItem[];
   selectedCustomer: CollectionQueueItem | null;
   attempts: CollectionAttempt[];
   promises: PaymentPromise[];
+  stats: CollectionStats;
   isLoading: boolean;
   error: string | null;
   filters: CollectionFilters;
@@ -75,11 +83,20 @@ export const useCollection = (): UseCollectionReturn => {
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [attempts, setAttempts] = useState<CollectionAttempt[]>([]);
   const [promises, setPromises] = useState<PaymentPromise[]>([]);
+  const [stats, setStats] = useState<CollectionStats>({
+    totalNaFila: 0,
+    cobradosHoje: 0,
+    cobradosTotal: 0,
+    valorTotalPendente: 0,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<CollectionFilters>({ safra: 'all', parcela: 'all' });
   const [safraOptions, setSafraOptions] = useState<string[]>([]);
   const [parcelaOptions, setParcelaOptions] = useState<string[]>([]);
+  
+  // Ref to preserve selected customer ID during refresh
+  const selectedCustomerIdRef = useRef<string | null>(null);
 
   // Fetch filter options
   const fetchFilterOptions = useCallback(async () => {
@@ -104,8 +121,13 @@ export const useCollection = (): UseCollectionReturn => {
     setIsLoading(true);
     setError(null);
 
+    // Save current selected customer ID before refresh
+    const currentSelectedId = selectedCustomerIdRef.current;
+
     try {
       const today = new Date().toISOString().split('T')[0];
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
       
       // Build query for overdue contracts (unpaid and past due date)
       let query = supabase
@@ -133,14 +155,37 @@ export const useCollection = (): UseCollectionReturn => {
         query = query.eq('numero_fatura', filters.parcela);
       }
 
-      const { data: contracts, error: contractsError } = await query;
+      // Fetch contracts and attempts in parallel
+      const [contractsResult, attemptsResult] = await Promise.all([
+        query,
+        supabase
+          .from('collection_attempts')
+          .select('customer_id, created_at')
+          .order('created_at', { ascending: false })
+      ]);
 
-      if (contractsError) throw contractsError;
+      if (contractsResult.error) throw contractsResult.error;
+
+      // Build attempt map for fast lookup
+      const attemptMap = new Map<string, string>();
+      const attemptedTodaySet = new Set<string>();
+      
+      attemptsResult.data?.forEach(a => {
+        // Store first (most recent) attempt per customer
+        if (!attemptMap.has(a.customer_id)) {
+          attemptMap.set(a.customer_id, a.created_at || '');
+        }
+        // Check if attempted today
+        if (a.created_at && new Date(a.created_at) >= todayStart) {
+          attemptedTodaySet.add(a.customer_id);
+        }
+      });
 
       // Group by customer
       const customerMap = new Map<string, CollectionQueueItem>();
+      let valorTotalPendente = 0;
 
-      contracts?.forEach((contract) => {
+      contractsResult.data?.forEach((contract) => {
         const customer = contract.customers as unknown as {
           id: string;
           nome: string;
@@ -153,6 +198,8 @@ export const useCollection = (): UseCollectionReturn => {
         const diasAtraso = Math.floor(
           (new Date().getTime() - new Date(contract.data_vencimento).getTime()) / (1000 * 60 * 60 * 24)
         );
+
+        valorTotalPendente += contract.valor_fatura || 0;
 
         const existing = customerMap.get(customer.id);
 
@@ -172,10 +219,11 @@ export const useCollection = (): UseCollectionReturn => {
             total_pendente: contract.valor_fatura || 0,
             faturas_atrasadas: 1,
             max_dias_atraso: diasAtraso,
-            ultima_tentativa: null,
+            ultima_tentativa: attemptMap.get(customer.id) || null,
             ultima_promessa: null,
             priority_score: diasAtraso,
-            first_invoice_id: contract.id, // Store first invoice for attempts
+            first_invoice_id: contract.id,
+            has_attempt: attemptMap.has(customer.id),
           });
         }
       });
@@ -184,14 +232,39 @@ export const useCollection = (): UseCollectionReturn => {
       const queueItems = Array.from(customerMap.values())
         .sort((a, b) => b.priority_score - a.priority_score);
 
+      // Calculate stats
+      const cobradosTotal = queueItems.filter(c => c.has_attempt).length;
+      const cobradosHoje = queueItems.filter(c => attemptedTodaySet.has(c.customer_id)).length;
+
+      setStats({
+        totalNaFila: queueItems.length,
+        cobradosHoje,
+        cobradosTotal,
+        valorTotalPendente,
+      });
+
       setQueue(queueItems);
       
       if (queueItems.length > 0) {
-        setSelectedCustomer(queueItems[0]);
-        setSelectedIndex(0);
+        // Try to preserve the previously selected customer
+        const previousIndex = currentSelectedId 
+          ? queueItems.findIndex(c => c.customer_id === currentSelectedId)
+          : -1;
+          
+        if (previousIndex >= 0) {
+          // Maintain the same customer selected
+          setSelectedCustomer(queueItems[previousIndex]);
+          setSelectedIndex(previousIndex);
+        } else {
+          // Select the first if previous doesn't exist anymore
+          setSelectedCustomer(queueItems[0]);
+          setSelectedIndex(0);
+          selectedCustomerIdRef.current = queueItems[0].customer_id;
+        }
       } else {
         setSelectedCustomer(null);
         setSelectedIndex(0);
+        selectedCustomerIdRef.current = null;
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar fila de cobrança');
@@ -287,6 +360,7 @@ export const useCollection = (): UseCollectionReturn => {
     const index = queue.findIndex((c) => c.customer_id === customer.customer_id);
     setSelectedCustomer(customer);
     setSelectedIndex(index >= 0 ? index : 0);
+    selectedCustomerIdRef.current = customer.customer_id;
   }, [queue]);
 
   const nextCustomer = useCallback(() => {
@@ -294,6 +368,7 @@ export const useCollection = (): UseCollectionReturn => {
     const newIndex = (selectedIndex + 1) % queue.length;
     setSelectedIndex(newIndex);
     setSelectedCustomer(queue[newIndex]);
+    selectedCustomerIdRef.current = queue[newIndex].customer_id;
   }, [queue, selectedIndex]);
 
   const previousCustomer = useCallback(() => {
@@ -301,6 +376,7 @@ export const useCollection = (): UseCollectionReturn => {
     const newIndex = selectedIndex === 0 ? queue.length - 1 : selectedIndex - 1;
     setSelectedIndex(newIndex);
     setSelectedCustomer(queue[newIndex]);
+    selectedCustomerIdRef.current = queue[newIndex].customer_id;
   }, [queue, selectedIndex]);
 
   const registerAttempt = useCallback(async (data: NewAttempt) => {
@@ -441,6 +517,7 @@ export const useCollection = (): UseCollectionReturn => {
     selectedCustomer,
     attempts,
     promises,
+    stats,
     isLoading,
     error,
     filters,
