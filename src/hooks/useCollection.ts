@@ -31,6 +31,7 @@ interface UseCollectionReturn {
   registerPromise: (data: NewPromise) => Promise<void>;
   updatePromiseStatus: (id: string, status: PromiseStatus) => Promise<void>;
   refreshQueue: () => void;
+  refreshHistory: () => Promise<void>;
   nextCustomer: () => void;
   previousCustomer: () => void;
 }
@@ -425,6 +426,16 @@ export const useCollection = (): UseCollectionReturn => {
     }
   }, [selectedCustomer, fetchPromises]);
 
+  // Refresh history for the currently selected customer
+  const refreshHistory = useCallback(async () => {
+    if (selectedCustomer) {
+      await Promise.all([
+        fetchAttempts(selectedCustomer.customer_id),
+        fetchPromises(selectedCustomer.customer_id),
+      ]);
+    }
+  }, [selectedCustomer, fetchAttempts, fetchPromises]);
+
   return {
     queue,
     selectedCustomer,
@@ -441,6 +452,7 @@ export const useCollection = (): UseCollectionReturn => {
     registerPromise,
     updatePromiseStatus,
     refreshQueue: fetchQueue,
+    refreshHistory,
     nextCustomer,
     previousCustomer,
   };
