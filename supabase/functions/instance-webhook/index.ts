@@ -127,7 +127,16 @@ serve(async (req) => {
           );
         }
 
-        console.log(`[instance-webhook] Connecting instance: ${instance_id}`);
+        // Get instance name from database
+        const { data: instanceData } = await supabase
+          .from('instances')
+          .select('name')
+          .eq('instance_id', instance_id)
+          .maybeSingle();
+
+        const instanceName = instanceData?.name || '';
+
+        console.log(`[instance-webhook] Connecting instance: ${instance_id}, name: ${instanceName}`);
 
         // Update status to connecting
         await supabase
@@ -135,11 +144,11 @@ serve(async (req) => {
           .update({ status: 'connecting' })
           .eq('instance_id', instance_id);
 
-        // Call external webhook to get QR code
+        // Call external webhook to get QR code - including name
         const webhookRes = await fetch(WEBHOOK_CONNECT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ instance_id, token }),
+          body: JSON.stringify({ instance_id, token, name: instanceName }),
         });
 
         const webhookText = await webhookRes.text();
