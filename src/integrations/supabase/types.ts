@@ -179,6 +179,42 @@ export type Database = {
         }
         Relationships: []
       }
+      instances: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          instance_id: string
+          name: string
+          phone_number: string | null
+          status: string | null
+          token: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          instance_id: string
+          name: string
+          phone_number?: string | null
+          status?: string | null
+          token: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          instance_id?: string
+          name?: string
+          phone_number?: string | null
+          status?: string | null
+          token?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
           contract_id: string | null
