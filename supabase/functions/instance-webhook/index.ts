@@ -88,21 +88,23 @@ serve(async (req) => {
           );
         }
 
-        // Save to database
-        const { data: instance, error: insertError } = await supabase
+        // Save to database using upsert to handle existing instances
+        const { data: instance, error: upsertError } = await supabase
           .from('instances')
-          .insert({
+          .upsert({
             instance_id: webhookData.instance_id,
             token: webhookData.token,
             name,
             status: 'disconnected',
             created_by: user.id,
+          }, {
+            onConflict: 'instance_id',
           })
           .select()
           .single();
 
-        if (insertError) {
-          console.error('[instance-webhook] Insert error:', insertError);
+        if (upsertError) {
+          console.error('[instance-webhook] Upsert error:', upsertError);
           return new Response(
             JSON.stringify({ success: false, error: 'Erro ao salvar instância' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
