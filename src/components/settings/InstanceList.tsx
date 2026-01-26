@@ -109,7 +109,6 @@ export function InstanceList() {
         open={connectDialogOpen}
         onOpenChange={handleConnectDialogChange}
         onConnect={connectInstance}
-        onCheckStatus={checkStatus}
       />
     </>
   );
