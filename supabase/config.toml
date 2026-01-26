@@ -1,1 +1,4 @@
 project_id = "nsdisfhrgxatxaenyrbx"
+
+[functions.instance-webhook]
+verify_jwt = false
