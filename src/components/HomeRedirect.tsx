@@ -3,9 +3,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 export const HomeRedirect = () => {
-  const { session, role, isLoading } = useAuth();
+  const { session, role, isLoading, userDataLoaded } = useAuth();
 
-  // Show loading while auth state is being determined
+  // Still loading auth or user data
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -19,20 +19,16 @@ export const HomeRedirect = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Session exists but role not loaded yet, keep showing loader
-  if (role === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+  // User data loaded but no role found (user without assigned role)
+  if (userDataLoaded && !role) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
-  // Operadores vão para cobrança
+  // Operators go to collection
   if (role === 'cobrador') {
     return <Navigate to="/collection" replace />;
   }
 
-  // Admin e supervisor vão para dashboard
+  // Admin and supervisor go to dashboard
   return <Navigate to="/dashboard" replace />;
 };
