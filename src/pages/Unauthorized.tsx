@@ -19,8 +19,8 @@ export default function Unauthorized() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button onClick={() => navigate('/dashboard')} className="w-full">
-            Voltar ao Dashboard
+          <Button onClick={() => navigate('/')} className="w-full">
+            Voltar à Página Inicial
           </Button>
         </CardContent>
       </Card>

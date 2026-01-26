@@ -4,11 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, Plus, RefreshCw } from 'lucide-react';
+import { Users, Plus, RefreshCw, Pencil } from 'lucide-react';
 import { useUsers, SystemUser } from '@/hooks/useUsers';
 import { CreateUserDialog } from './CreateUserDialog';
+import { EditUserDialog } from './EditUserDialog';
 
-function UserRow({ user, getRoleLabel }: { user: SystemUser; getRoleLabel: (role: string) => string }) {
+function UserRow({ 
+  user, 
+  getRoleLabel, 
+  onEdit 
+}: { 
+  user: SystemUser; 
+  getRoleLabel: (role: string) => string;
+  onEdit: (user: SystemUser) => void;
+}) {
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -42,9 +51,19 @@ function UserRow({ user, getRoleLabel }: { user: SystemUser; getRoleLabel: (role
           <p className="text-xs text-muted-foreground">{user.email}</p>
         </div>
       </div>
-      <Badge variant={getRoleBadgeVariant(user.role)}>
-        {getRoleLabel(user.role)}
-      </Badge>
+      <div className="flex items-center gap-2">
+        <Badge variant={getRoleBadgeVariant(user.role)}>
+          {getRoleLabel(user.role)}
+        </Badge>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-8 w-8"
+          onClick={() => onEdit(user)}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -69,8 +88,15 @@ function UserListSkeleton() {
 }
 
 export function UserList() {
-  const { users, isLoading, isCreating, createUser, refreshUsers, getRoleLabel } = useUsers();
+  const { users, isLoading, isCreating, isUpdating, createUser, updateUser, refreshUsers, getRoleLabel } = useUsers();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
+
+  const handleEditUser = (user: SystemUser) => {
+    setSelectedUser(user);
+    setEditDialogOpen(true);
+  };
 
   return (
     <>
@@ -116,7 +142,12 @@ export function UserList() {
           ) : (
             <div className="divide-y">
               {users.map((user) => (
-                <UserRow key={user.id} user={user} getRoleLabel={getRoleLabel} />
+                <UserRow 
+                  key={user.id} 
+                  user={user} 
+                  getRoleLabel={getRoleLabel}
+                  onEdit={handleEditUser}
+                />
               ))}
             </div>
           )}
@@ -128,6 +159,14 @@ export function UserList() {
         onOpenChange={setCreateDialogOpen}
         onSubmit={createUser}
         isCreating={isCreating}
+      />
+
+      <EditUserDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        user={selectedUser}
+        onSubmit={updateUser}
+        isUpdating={isUpdating}
       />
     </>
   );
