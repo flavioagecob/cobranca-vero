@@ -1,179 +1,84 @@
 
-# Plano: Registro Automático de Contato Após Envio de WhatsApp
 
-## Objetivo
-Quando uma mensagem WhatsApp for disparada automaticamente, registrar a tentativa de contato (`collection_attempt`) no banco de dados de forma automática, eliminando a necessidade de registro manual.
+# Plano: Corrigir Registro de Contato - Foreign Key Incorreta
 
-## Situação Atual
-- A Edge Function `send-whatsapp` dispara a mensagem via webhook do n8n
-- O n8n executa o disparo e encerra o workflow
-- O registro de tentativa (`collection_attempts`) é feito manualmente pelo operador através do formulário `AttemptForm`
+## Problema Identificado
 
-## Solução Proposta
-Registrar a tentativa de contato diretamente na Edge Function `send-whatsapp` após receber confirmação de sucesso do webhook do n8n.
+A mensagem WhatsApp para **MICHELE CRISTIANE JOVINO SILVA** foi **enviada com sucesso** pelo n8n, porém o **registro do contato falhou** devido a um erro de foreign key no banco de dados.
 
----
+### Erro nos Logs
 
-## Fluxo Atualizado
-
-```text
-Usuário clica "Enviar WhatsApp"
-         │
-         ▼
-  ┌─────────────────────┐
-  │ Edge Function       │
-  │ send-whatsapp       │
-  └──────────┬──────────┘
-             │
-             ▼
-  ┌─────────────────────┐
-  │ Webhook n8n         │
-  │ (disparo real)      │
-  └──────────┬──────────┘
-             │
-             ▼
-  ┌─────────────────────┐
-  │ n8n retorna sucesso │
-  └──────────┬──────────┘
-             │
-             ▼
-  ┌─────────────────────────────┐
-  │ Edge Function registra      │   ← NOVO
-  │ collection_attempt no banco │
-  └──────────┬──────────────────┘
-             │
-             ▼
-  ┌─────────────────────┐
-  │ Toast de sucesso    │
-  │ + histórico atualiza│
-  └─────────────────────┘
 ```
-
----
-
-## Etapas de Implementação
-
-### 1. Atualizar Edge Function `send-whatsapp`
-
-**Arquivo:** `supabase/functions/send-whatsapp/index.ts`
-
-**Mudanças:**
-- Receber dados adicionais no payload: `customer_id` e `invoice_id`
-- Após sucesso do webhook, inserir registro em `collection_attempts`
-- Retornar o ID da tentativa criada na resposta
-
-**Novo Payload:**
-```json
-{
-  "instance_id": "string",
-  "phone": "string",
-  "message": "string",
-  "customer_id": "string",
-  "invoice_id": "string"
+Error registering attempt: {
+  code: "23503",
+  details: 'Key (invoice_id)=(2f44c1c9-9c8b-4c76-b56c-527f5242cafd) is not present in table "invoices".',
+  message: 'insert or update on table "collection_attempts" violates foreign key constraint "collection_attempts_invoice_id_fkey"'
 }
 ```
 
-**Registro a inserir:**
-```json
-{
-  "customer_id": "uuid do cliente",
-  "invoice_id": "uuid da fatura",
-  "collector_id": "uuid do usuário logado",
-  "channel": "whatsapp",
-  "status": "sucesso",
-  "notes": "Mensagem enviada automaticamente via template"
-}
+### Causa Raiz
+
+A tabela `collection_attempts` está configurada com uma foreign key que referencia a tabela `invoices`:
+
+```
+collection_attempts.invoice_id → invoices.id
 ```
 
-### 2. Atualizar Hook `useSendWhatsapp`
-
-**Arquivo:** `src/hooks/useSendWhatsapp.ts`
-
-**Mudanças:**
-- Adicionar parâmetros `customer_id` e `invoice_id` na função `sendMessage`
-- Passar esses dados para a Edge Function
-
-### 3. Atualizar Componente `MessageTemplates`
-
-**Arquivo:** `src/components/collection/MessageTemplates.tsx`
-
-**Mudanças:**
-- Receber props adicionais: `customerId` e `invoiceId`
-- Passar esses dados na chamada `sendMessage`
-
-### 4. Atualizar Página `Collection`
-
-**Arquivo:** `src/pages/Collection.tsx`
-
-**Mudanças:**
-- Passar `customerId` e `invoiceId` para o componente `MessageTemplates`
-- Após envio bem-sucedido, atualizar o histórico de tentativas (já feito pelo hook useCollection)
+**Porém**, os dados da fila de cobrança vêm da tabela `operator_contracts`, não de `invoices`. Quando passamos o ID do contrato como `invoice_id`, o banco rejeita porque esse UUID não existe na tabela `invoices`.
 
 ---
 
-## Detalhes Técnicos
+## Solução
 
-### Edge Function: send-whatsapp (atualizada)
+Alterar a foreign key da coluna `invoice_id` na tabela `collection_attempts` para referenciar `operator_contracts` em vez de `invoices`.
 
-```text
-POST /functions/v1/send-whatsapp
-Authorization: Bearer <user_token>
+### Opção 1: Alterar a Foreign Key (Recomendado)
 
-Body:
-{
-  "instance_id": string,
-  "phone": string,
-  "message": string,
-  "customer_id": string,    ← NOVO
-  "invoice_id": string      ← NOVO
-}
+Criar uma migration que:
+1. Remove a constraint antiga (`collection_attempts_invoice_id_fkey`)
+2. Cria uma nova constraint referenciando `operator_contracts`
 
-Response (sucesso):
-{
-  "success": true,
-  "message": "Mensagem enviada com sucesso",
-  "attempt_id": string      ← NOVO (ID do registro criado)
-}
+### Opção 2: Permitir NULL ou Remover a FK
+
+Se a tabela `invoices` for usada para outro propósito:
+1. Tornar o campo `invoice_id` nullable
+2. Remover a foreign key constraint completamente
+
+---
+
+## Implementacao
+
+### Migration SQL
+
+```sql
+-- Remove a foreign key antiga que referencia 'invoices'
+ALTER TABLE collection_attempts
+DROP CONSTRAINT IF EXISTS collection_attempts_invoice_id_fkey;
+
+-- Cria nova foreign key referenciando 'operator_contracts'
+ALTER TABLE collection_attempts
+ADD CONSTRAINT collection_attempts_invoice_id_fkey
+FOREIGN KEY (invoice_id) REFERENCES operator_contracts(id) ON DELETE CASCADE;
 ```
 
-### Dados do collection_attempt
+### Tabela payment_promises
 
-| Campo | Valor |
-|-------|-------|
-| customer_id | UUID do cliente |
-| invoice_id | UUID da fatura |
-| collector_id | UUID do usuário logado (extraído do token) |
-| channel | 'whatsapp' |
-| status | 'sucesso' |
-| notes | 'Mensagem enviada automaticamente via template' |
+Verificar se a tabela `payment_promises` também possui a mesma foreign key incorreta e aplicar a mesma correção se necessário.
 
 ---
 
-## Sobre o n8n
+## Arquivos a Modificar
 
-O workflow do n8n **não precisa de alteração** para esta implementação, pois:
-- O n8n já retorna `{"message": "Workflow was started"}` com status 200
-- Isso é suficiente para considerarmos que o disparo foi iniciado
-- O registro será feito pela Edge Function após receber essa confirmação
-
-Se no futuro o n8n precisar retornar mais informações (como ID da mensagem do WhatsApp), basta ajustar o workflow para retornar esses dados e a Edge Function para capturá-los.
+| Arquivo | Acao |
+|---------|------|
+| Nova migration SQL | Criar para corrigir as foreign keys |
 
 ---
 
-## Resumo dos Arquivos a Modificar
+## Resultado Esperado
 
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/send-whatsapp/index.ts` | Adicionar registro de `collection_attempt` após sucesso |
-| `src/hooks/useSendWhatsapp.ts` | Adicionar parâmetros `customer_id` e `invoice_id` |
-| `src/components/collection/MessageTemplates.tsx` | Receber e passar `customerId` e `invoiceId` |
-| `src/pages/Collection.tsx` | Passar dados adicionais para `MessageTemplates` |
+Apos a correcao:
+1. O envio de mensagem WhatsApp continuara funcionando normalmente
+2. O registro de contato sera salvo automaticamente no banco
+3. O historico do cliente sera atualizado em tempo real
 
----
-
-## Benefícios
-
-1. **Automação completa**: Um clique dispara a mensagem E registra o contato
-2. **Histórico preciso**: Todas as mensagens enviadas ficam registradas automaticamente
-3. **Menos trabalho manual**: Operador não precisa preencher formulário após enviar mensagem
-4. **Rastreabilidade**: Cada tentativa tem o registro do usuário que enviou
