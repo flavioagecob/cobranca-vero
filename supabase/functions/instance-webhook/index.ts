@@ -159,8 +159,27 @@ serve(async (req) => {
           webhookResponse = JSON.parse(webhookText);
         } catch {
           console.error('[instance-webhook] Failed to parse connect webhook response');
+          // Reset status to disconnected on error
+          await supabase
+            .from('instances')
+            .update({ status: 'disconnected' })
+            .eq('instance_id', instance_id);
           return new Response(
             JSON.stringify({ success: false, error: 'Resposta inválida do webhook de conexão' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Check if response indicates an error
+        if (webhookResponse.error || webhookResponse.success === false) {
+          console.error('[instance-webhook] Connect webhook returned error:', webhookResponse);
+          // Reset status to disconnected on error
+          await supabase
+            .from('instances')
+            .update({ status: 'disconnected' })
+            .eq('instance_id', instance_id);
+          return new Response(
+            JSON.stringify({ success: false, error: webhookResponse.error || 'Erro ao conectar instância' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
