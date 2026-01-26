@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Instance, ConnectResult, StatusResult } from '@/types/instance';
+import { Instance, ConnectResult } from '@/types/instance';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ConnectInstanceDialogProps {
@@ -16,7 +16,6 @@ interface ConnectInstanceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConnect: (instanceId: string, token: string) => Promise<ConnectResult>;
-  onCheckStatus: (instanceId: string, token: string) => Promise<StatusResult>;
 }
 
 type ConnectionState = 'loading' | 'qr_code' | 'connected' | 'error';
@@ -26,7 +25,6 @@ export function ConnectInstanceDialog({
   open,
   onOpenChange,
   onConnect,
-  onCheckStatus,
 }: ConnectInstanceDialogProps) {
   const [state, setState] = useState<ConnectionState>('loading');
   const [qrCode, setQrCode] = useState<string | null>(null);
@@ -49,18 +47,6 @@ export function ConnectInstanceDialog({
     }
   }, [instance, onConnect]);
 
-  const checkConnectionStatus = useCallback(async () => {
-    if (!instance || state !== 'qr_code') return;
-
-    const result = await onCheckStatus(instance.instance_id, instance.token);
-
-    if (result.success && result.status === 'connected') {
-      setState('connected');
-      setTimeout(() => {
-        onOpenChange(false);
-      }, 2000);
-    }
-  }, [instance, state, onCheckStatus, onOpenChange]);
 
   // Start connection when dialog opens
   useEffect(() => {
@@ -106,13 +92,6 @@ export function ConnectInstanceDialog({
     };
   }, [open, instance, onOpenChange]);
 
-  // Keep polling as fallback (less frequent)
-  useEffect(() => {
-    if (state !== 'qr_code') return;
-
-    const interval = setInterval(checkConnectionStatus, 5000);
-    return () => clearInterval(interval);
-  }, [state, checkConnectionStatus]);
 
   const renderContent = () => {
     switch (state) {
