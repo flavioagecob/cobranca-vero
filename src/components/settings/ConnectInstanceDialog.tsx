@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Instance, ConnectResult, StatusResult } from '@/types/instance';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ConnectInstanceDialogProps {
   instance: Instance | null;
@@ -72,11 +73,44 @@ export function ConnectInstanceDialog({
     }
   }, [open, instance, startConnection]);
 
-  // Poll for status when showing QR code
+  // Supabase Realtime subscription to detect when status changes to connected
+  useEffect(() => {
+    if (!open || !instance) return;
+
+    const channel = supabase
+      .channel(`instance-status-${instance.instance_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'instances',
+          filter: `instance_id=eq.${instance.instance_id}`,
+        },
+        (payload) => {
+          const updated = payload.new as { status?: string };
+          console.log('[ConnectInstanceDialog] Realtime update:', updated);
+          if (updated.status === 'connected') {
+            setState('connected');
+            setTimeout(() => onOpenChange(false), 2000);
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        console.log(`[ConnectInstanceDialog] Channel status: ${status}`, err);
+      });
+
+    return () => {
+      console.log('[ConnectInstanceDialog] Unsubscribing from channel');
+      supabase.removeChannel(channel);
+    };
+  }, [open, instance, onOpenChange]);
+
+  // Keep polling as fallback (less frequent)
   useEffect(() => {
     if (state !== 'qr_code') return;
 
-    const interval = setInterval(checkConnectionStatus, 3000);
+    const interval = setInterval(checkConnectionStatus, 5000);
     return () => clearInterval(interval);
   }, [state, checkConnectionStatus]);
 
