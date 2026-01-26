@@ -1,35 +1,25 @@
 
-
-# Plano: Envio de Mensagens WhatsApp via Webhook
+# Plano: Registro Automático de Contato Após Envio de WhatsApp
 
 ## Objetivo
-Substituir a abertura do WhatsApp Web pelo envio automático de mensagens através de um webhook, utilizando as instâncias WhatsApp conectadas no sistema.
+Quando uma mensagem WhatsApp for disparada automaticamente, registrar a tentativa de contato (`collection_attempt`) no banco de dados de forma automática, eliminando a necessidade de registro manual.
 
 ## Situação Atual
-- O botão "Abrir WhatsApp" no componente `MessageTemplates` abre o WhatsApp Web com a mensagem pré-preenchida
-- O usuário precisa enviar manualmente
-- Já temos instâncias WhatsApp conectadas no banco de dados
+- A Edge Function `send-whatsapp` dispara a mensagem via webhook do n8n
+- O n8n executa o disparo e encerra o workflow
+- O registro de tentativa (`collection_attempts`) é feito manualmente pelo operador através do formulário `AttemptForm`
 
 ## Solução Proposta
-Criar uma Edge Function que receba os dados da mensagem e chame o webhook do n8n para disparo automático, e atualizar o componente `MessageTemplates` para usar esse fluxo.
+Registrar a tentativa de contato diretamente na Edge Function `send-whatsapp` após receber confirmação de sucesso do webhook do n8n.
 
 ---
 
-## Fluxo de Envio
+## Fluxo Atualizado
 
 ```text
-Usuário seleciona template
-         │
-         ▼
 Usuário clica "Enviar WhatsApp"
          │
          ▼
-  ┌─────────────────────┐
-  │ Seleciona instância │  (se houver mais de uma conectada)
-  │ conectada           │
-  └──────────┬──────────┘
-             │
-             ▼
   ┌─────────────────────┐
   │ Edge Function       │
   │ send-whatsapp       │
@@ -43,8 +33,19 @@ Usuário clica "Enviar WhatsApp"
              │
              ▼
   ┌─────────────────────┐
+  │ n8n retorna sucesso │
+  └──────────┬──────────┘
+             │
+             ▼
+  ┌─────────────────────────────┐
+  │ Edge Function registra      │   ← NOVO
+  │ collection_attempt no banco │
+  └──────────┬──────────────────┘
+             │
+             ▼
+  ┌─────────────────────┐
   │ Toast de sucesso    │
-  │ ou erro             │
+  │ + histórico atualiza│
   └─────────────────────┘
 ```
 
@@ -52,63 +53,67 @@ Usuário clica "Enviar WhatsApp"
 
 ## Etapas de Implementação
 
-### 1. Criar Edge Function `send-whatsapp`
+### 1. Atualizar Edge Function `send-whatsapp`
 
 **Arquivo:** `supabase/functions/send-whatsapp/index.ts`
 
-**Responsabilidades:**
-- Receber os dados da mensagem (telefone, mensagem, instance_id)
-- Validar que a instância está conectada
-- Chamar o webhook do n8n para disparo
-- Retornar sucesso ou erro
+**Mudanças:**
+- Receber dados adicionais no payload: `customer_id` e `invoice_id`
+- Após sucesso do webhook, inserir registro em `collection_attempts`
+- Retornar o ID da tentativa criada na resposta
 
-**Dados enviados ao webhook:**
+**Novo Payload:**
 ```json
 {
-  "instance_id": "rfe56023e0359b1",
-  "token": "bd7edd56-e98c-46f0-93ea-7e6c058c37d4",
-  "phone": "5511999999999",
-  "message": "Olá João! Identificamos uma pendência..."
+  "instance_id": "string",
+  "phone": "string",
+  "message": "string",
+  "customer_id": "string",
+  "invoice_id": "string"
 }
 ```
 
-### 2. Atualizar `supabase/config.toml`
+**Registro a inserir:**
+```json
+{
+  "customer_id": "uuid do cliente",
+  "invoice_id": "uuid da fatura",
+  "collector_id": "uuid do usuário logado",
+  "channel": "whatsapp",
+  "status": "sucesso",
+  "notes": "Mensagem enviada automaticamente via template"
+}
+```
 
-Adicionar a configuração da nova Edge Function.
-
-### 3. Criar Hook `useSendWhatsapp`
+### 2. Atualizar Hook `useSendWhatsapp`
 
 **Arquivo:** `src/hooks/useSendWhatsapp.ts`
 
-**Responsabilidades:**
-- Buscar instâncias conectadas
-- Função para enviar mensagem via Edge Function
-- Gerenciar estado de loading/erro
+**Mudanças:**
+- Adicionar parâmetros `customer_id` e `invoice_id` na função `sendMessage`
+- Passar esses dados para a Edge Function
 
-### 4. Atualizar Componente `MessageTemplates`
+### 3. Atualizar Componente `MessageTemplates`
 
 **Arquivo:** `src/components/collection/MessageTemplates.tsx`
 
 **Mudanças:**
-- Adicionar prop `customerPhone` para o número do destinatário
-- Importar e usar o hook `useSendWhatsapp`
-- Substituir `window.open(wa.me...)` por chamada à Edge Function
-- Adicionar seletor de instância (se houver múltiplas conectadas)
-- Mostrar estado de loading durante envio
-- Mostrar toast de sucesso/erro
+- Receber props adicionais: `customerId` e `invoiceId`
+- Passar esses dados na chamada `sendMessage`
 
-### 5. Atualizar Página `Collection`
+### 4. Atualizar Página `Collection`
 
 **Arquivo:** `src/pages/Collection.tsx`
 
 **Mudanças:**
-- Passar `customerPhone` para o componente `MessageTemplates`
+- Passar `customerId` e `invoiceId` para o componente `MessageTemplates`
+- Após envio bem-sucedido, atualizar o histórico de tentativas (já feito pelo hook useCollection)
 
 ---
 
 ## Detalhes Técnicos
 
-### Edge Function: send-whatsapp
+### Edge Function: send-whatsapp (atualizada)
 
 ```text
 POST /functions/v1/send-whatsapp
@@ -118,66 +123,57 @@ Body:
 {
   "instance_id": string,
   "phone": string,
-  "message": string
+  "message": string,
+  "customer_id": string,    ← NOVO
+  "invoice_id": string      ← NOVO
 }
 
 Response (sucesso):
 {
   "success": true,
-  "message_id": string (opcional, se o webhook retornar)
-}
-
-Response (erro):
-{
-  "success": false,
-  "error": string
+  "message": "Mensagem enviada com sucesso",
+  "attempt_id": string      ← NOVO (ID do registro criado)
 }
 ```
 
-### Webhook URL (n8n)
-```
-https://n8n.srv743366.hstgr.cloud/webhook-test/b6e0f090-6b10-4eb6-a26f-1bc9fd21ae8b
-```
+### Dados do collection_attempt
 
-### Interface Atualizada do MessageTemplates
-
-```text
-┌─────────────────────────────────────┐
-│  Templates de Mensagem              │
-├─────────────────────────────────────┤
-│  [Lista de templates WhatsApp]      │
-│  [Lista de templates E-mail]        │
-├─────────────────────────────────────┤
-│  Template selecionado:              │
-│  ┌─────────────────────────────┐    │
-│  │  Conteúdo editável          │    │
-│  │  ...                        │    │
-│  └─────────────────────────────┘    │
-│                                     │
-│  Enviar via: [Instância: whats-8538]│  ← NOVO
-│                                     │
-│  [Copiar]  [Enviar WhatsApp]        │  ← Botão atualizado
-└─────────────────────────────────────┘
-```
+| Campo | Valor |
+|-------|-------|
+| customer_id | UUID do cliente |
+| invoice_id | UUID da fatura |
+| collector_id | UUID do usuário logado (extraído do token) |
+| channel | 'whatsapp' |
+| status | 'sucesso' |
+| notes | 'Mensagem enviada automaticamente via template' |
 
 ---
 
-## Resumo dos Arquivos a Criar/Modificar
+## Sobre o n8n
 
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/send-whatsapp/index.ts` | Criar |
-| `supabase/config.toml` | Modificar |
-| `src/hooks/useSendWhatsapp.ts` | Criar |
-| `src/components/collection/MessageTemplates.tsx` | Modificar |
-| `src/pages/Collection.tsx` | Modificar |
+O workflow do n8n **não precisa de alteração** para esta implementação, pois:
+- O n8n já retorna `{"message": "Workflow was started"}` com status 200
+- Isso é suficiente para considerarmos que o disparo foi iniciado
+- O registro será feito pela Edge Function após receber essa confirmação
+
+Se no futuro o n8n precisar retornar mais informações (como ID da mensagem do WhatsApp), basta ajustar o workflow para retornar esses dados e a Edge Function para capturá-los.
 
 ---
 
-## Validações e Tratamentos de Erro
+## Resumo dos Arquivos a Modificar
 
-1. **Sem instância conectada:** Mostrar alerta pedindo para conectar uma instância em Configurações
-2. **Telefone inválido/ausente:** Mostrar erro informando que o cliente não possui telefone cadastrado
-3. **Erro no webhook:** Mostrar toast com mensagem de erro e opção de tentar novamente
-4. **Sucesso:** Mostrar toast confirmando o envio e registrar a tentativa automaticamente
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/send-whatsapp/index.ts` | Adicionar registro de `collection_attempt` após sucesso |
+| `src/hooks/useSendWhatsapp.ts` | Adicionar parâmetros `customer_id` e `invoice_id` |
+| `src/components/collection/MessageTemplates.tsx` | Receber e passar `customerId` e `invoiceId` |
+| `src/pages/Collection.tsx` | Passar dados adicionais para `MessageTemplates` |
 
+---
+
+## Benefícios
+
+1. **Automação completa**: Um clique dispara a mensagem E registra o contato
+2. **Histórico preciso**: Todas as mensagens enviadas ficam registradas automaticamente
+3. **Menos trabalho manual**: Operador não precisa preencher formulário após enviar mensagem
+4. **Rastreabilidade**: Cada tentativa tem o registro do usuário que enviou
