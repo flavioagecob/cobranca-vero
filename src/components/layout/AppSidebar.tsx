@@ -46,7 +46,7 @@ const mainNavItems: NavItem[] = [
     title: "Dashboard",
     url: "/dashboard",
     icon: LayoutDashboard,
-    roles: ['admin', 'supervisor', 'cobrador'],
+    roles: ['admin', 'supervisor'],
   },
   {
     title: "Clientes",
