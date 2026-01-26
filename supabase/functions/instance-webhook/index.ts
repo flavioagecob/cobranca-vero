@@ -67,9 +67,11 @@ serve(async (req) => {
         const webhookText = await webhookRes.text();
         console.log(`[instance-webhook] Create webhook response: ${webhookText}`);
 
-        let webhookResponse;
+        let webhookData;
         try {
-          webhookResponse = JSON.parse(webhookText);
+          const parsed = JSON.parse(webhookText);
+          // Handle both array and object responses
+          webhookData = Array.isArray(parsed) ? parsed[0] : parsed;
         } catch {
           console.error('[instance-webhook] Failed to parse webhook response');
           return new Response(
@@ -78,8 +80,8 @@ serve(async (req) => {
           );
         }
 
-        if (!webhookResponse.instance_id || !webhookResponse.token) {
-          console.error('[instance-webhook] Missing instance_id or token in response');
+        if (!webhookData || !webhookData.instance_id || !webhookData.token) {
+          console.error('[instance-webhook] Missing instance_id or token in response:', webhookData);
           return new Response(
             JSON.stringify({ success: false, error: 'Resposta do webhook incompleta' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -90,8 +92,8 @@ serve(async (req) => {
         const { data: instance, error: insertError } = await supabase
           .from('instances')
           .insert({
-            instance_id: webhookResponse.instance_id,
-            token: webhookResponse.token,
+            instance_id: webhookData.instance_id,
+            token: webhookData.token,
             name,
             status: 'disconnected',
             created_by: user.id,
