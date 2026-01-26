@@ -28,8 +28,31 @@ interface UseCustomersReturn {
   toggleSort: (field: CustomerSortField) => void;
 }
 
+interface CollectionAttemptRecord {
+  id: string;
+  customer_id: string;
+  invoice_id: string;
+  collector_id: string;
+  channel: string;
+  status: string;
+  notes: string | null;
+  created_at: string | null;
+}
+
+interface PaymentPromiseRecord {
+  id: string;
+  invoice_id: string;
+  collector_id: string;
+  valor_prometido: number;
+  data_prometida: string;
+  status: string | null;
+  created_at: string | null;
+}
+
 interface UseCustomerDetailReturn {
   customer: CustomerWithDetails | null;
+  attempts: CollectionAttemptRecord[];
+  promises: PaymentPromiseRecord[];
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
@@ -593,12 +616,16 @@ export const useCustomers = (initialPageSize: number = 20): UseCustomersReturn =
 
 export const useCustomerDetail = (customerId: string | undefined): UseCustomerDetailReturn => {
   const [customer, setCustomer] = useState<CustomerWithDetails | null>(null);
+  const [attempts, setAttempts] = useState<CollectionAttemptRecord[]>([]);
+  const [promises, setPromises] = useState<PaymentPromiseRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchCustomer = useCallback(async () => {
     if (!customerId) {
       setCustomer(null);
+      setAttempts([]);
+      setPromises([]);
       setIsLoading(false);
       return;
     }
@@ -635,6 +662,27 @@ export const useCustomerDetail = (customerId: string | undefined): UseCustomerDe
         .eq('customer_id', customerId)
         .order('numero_fatura', { ascending: false });
 
+      // Fetch collection attempts for this customer
+      const { data: attemptsData } = await supabase
+        .from('collection_attempts')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      // Fetch payment promises via invoice_ids
+      const invoiceIds = (contractsData || []).map(c => c.id);
+      let promisesData: PaymentPromiseRecord[] = [];
+      if (invoiceIds.length > 0) {
+        const { data } = await supabase
+          .from('payment_promises')
+          .select('*')
+          .in('invoice_id', invoiceIds)
+          .order('data_prometida', { ascending: false })
+          .limit(50);
+        promisesData = (data || []) as PaymentPromiseRecord[];
+      }
+
       const customerWithDetails: CustomerWithDetails = {
         ...customerData,
         sales_base: salesData || [],
@@ -644,9 +692,13 @@ export const useCustomerDetail = (customerId: string | undefined): UseCustomerDe
       };
 
       setCustomer(customerWithDetails);
+      setAttempts((attemptsData || []) as CollectionAttemptRecord[]);
+      setPromises(promisesData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar cliente');
       setCustomer(null);
+      setAttempts([]);
+      setPromises([]);
     } finally {
       setIsLoading(false);
     }
@@ -658,6 +710,8 @@ export const useCustomerDetail = (customerId: string | undefined): UseCustomerDe
 
   return {
     customer,
+    attempts,
+    promises,
     isLoading,
     error,
     refetch: fetchCustomer,

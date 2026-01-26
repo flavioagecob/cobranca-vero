@@ -27,6 +27,7 @@ export default function Collection() {
     registerAttempt,
     registerPromise,
     refreshQueue,
+    refreshHistory,
     nextCustomer,
     previousCustomer,
   } = useCollection();
@@ -191,7 +192,10 @@ export default function Collection() {
                       invoiceId={selectedCustomer.first_invoice_id}
                       valorPendente={selectedCustomer.total_pendente}
                       diasAtraso={selectedCustomer.max_dias_atraso}
-                      onMessageSent={refreshQueue}
+                      onMessageSent={async () => {
+                        await refreshHistory();
+                        refreshQueue();
+                      }}
                     />
                   )}
                 </div>

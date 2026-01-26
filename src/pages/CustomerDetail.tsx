@@ -26,6 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useCustomerDetail } from '@/hooks/useCustomers';
+import { HistoryTimeline } from '@/components/collection/HistoryTimeline';
 import { 
   formatCpfCnpj, 
   formatPhone, 
@@ -34,11 +35,34 @@ import {
   getStatusColor 
 } from '@/lib/formatters';
 import { toast } from 'sonner';
+import type { CollectionAttempt, PaymentPromise } from '@/types/collection';
 
 export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { customer, isLoading, error } = useCustomerDetail(id);
+  const { customer, attempts, promises, isLoading, error } = useCustomerDetail(id);
+
+  // Map DB records to the expected types for HistoryTimeline
+  const mappedAttempts: CollectionAttempt[] = attempts.map(a => ({
+    id: a.id,
+    customer_id: a.customer_id,
+    invoice_id: a.invoice_id,
+    collector_id: a.collector_id,
+    channel: a.channel as CollectionAttempt['channel'],
+    status: a.status as CollectionAttempt['status'],
+    notes: a.notes,
+    created_at: a.created_at || new Date().toISOString(),
+  }));
+
+  const mappedPromises: PaymentPromise[] = promises.map(p => ({
+    id: p.id,
+    invoice_id: p.invoice_id,
+    collector_id: p.collector_id,
+    valor_prometido: p.valor_prometido,
+    data_prometida: p.data_prometida,
+    status: (p.status || 'pendente') as PaymentPromise['status'],
+    created_at: p.created_at || new Date().toISOString(),
+  }));
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -431,21 +455,7 @@ export default function CustomerDetail() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Histórico de Cobrança</CardTitle>
-            <CardDescription>Tentativas e promessas de pagamento</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-8 text-muted-foreground">
-              <p className="text-sm">Nenhuma tentativa de cobrança registrada</p>
-              <Button variant="outline" size="sm" className="mt-4">
-                <Phone className="h-4 w-4 mr-2" />
-                Registrar Contato
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <HistoryTimeline attempts={mappedAttempts} promises={mappedPromises} />
       </div>
     </div>
   );
