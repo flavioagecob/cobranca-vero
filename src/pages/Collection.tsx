@@ -187,8 +187,11 @@ export default function Collection() {
                       customerName={selectedCustomer.customer_name}
                       customerCpf={selectedCustomer.customer_cpf_cnpj}
                       customerPhone={selectedCustomer.customer_phone || ''}
+                      customerId={selectedCustomer.customer_id}
+                      invoiceId={selectedCustomer.first_invoice_id}
                       valorPendente={selectedCustomer.total_pendente}
                       diasAtraso={selectedCustomer.max_dias_atraso}
+                      onMessageSent={refreshQueue}
                     />
                   )}
                 </div>

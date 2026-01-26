@@ -15,18 +15,24 @@ interface MessageTemplatesProps {
   customerName: string;
   customerCpf?: string;
   customerPhone?: string;
+  customerId?: string;
+  invoiceId?: string;
   valorPendente?: number;
   diasAtraso?: number;
   onSelectTemplate?: (content: string) => void;
+  onMessageSent?: () => void;
 }
 
 export function MessageTemplates({ 
   customerName, 
   customerCpf = '',
   customerPhone = '',
+  customerId,
+  invoiceId,
   valorPendente = 0,
   diasAtraso = 0,
-  onSelectTemplate 
+  onSelectTemplate,
+  onMessageSent,
 }: MessageTemplatesProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<MessageTemplate | null>(null);
   const [editedContent, setEditedContent] = useState('');
@@ -89,12 +95,15 @@ export function MessageTemplates({
       return;
     }
 
-    const result = await sendMessage(customerPhone, editedContent);
+    const result = await sendMessage(customerPhone, editedContent, customerId, invoiceId);
 
     if (result.success) {
-      toast.success('Mensagem enviada com sucesso!');
+      toast.success('Mensagem enviada e contato registrado!');
       if (onSelectTemplate) {
         onSelectTemplate(editedContent);
+      }
+      if (onMessageSent) {
+        onMessageSent();
       }
     } else {
       toast.error(result.error || 'Erro ao enviar mensagem');

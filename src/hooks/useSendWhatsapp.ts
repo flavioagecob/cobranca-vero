@@ -48,7 +48,12 @@ export function useSendWhatsapp() {
     fetchConnectedInstances();
   }, []);
 
-  const sendMessage = async (phone: string, message: string): Promise<SendWhatsappResult> => {
+  const sendMessage = async (
+    phone: string, 
+    message: string,
+    customerId?: string,
+    invoiceId?: string
+  ): Promise<SendWhatsappResult> => {
     if (!selectedInstanceId) {
       return { success: false, error: 'Nenhuma instância selecionada' };
     }
@@ -74,6 +79,8 @@ export function useSendWhatsapp() {
           instance_id: selectedInstanceId,
           phone,
           message,
+          customer_id: customerId,
+          invoice_id: invoiceId,
         },
       });
 
