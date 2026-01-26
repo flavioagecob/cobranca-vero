@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const N8N_WEBHOOK_URL = 'https://n8n.srv743366.hstgr.cloud/webhook-test/b6e0f090-6b10-4eb6-a26f-1bc9fd21ae8b';
+const N8N_WEBHOOK_URL = 'https://n8n.srv743366.hstgr.cloud/webhook/b6e0f090-6b10-4eb6-a26f-1bc9fd21ae8b';
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
