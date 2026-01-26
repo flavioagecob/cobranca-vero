@@ -1,84 +1,114 @@
 
+# Plano: Corrigir Exibição do Histórico de Cobrança
 
-# Plano: Corrigir Registro de Contato - Foreign Key Incorreta
+## Problemas Identificados
 
-## Problema Identificado
+### Problema 1: Cliente MICHELE CRISTIANE JOVINO SILVA
+A cobrança foi disparada **antes** da correção da foreign key, por isso falhou. Após a correção, os disparos para JARBAS e PEDRO funcionaram perfeitamente. Para resolver, basta enviar novamente a mensagem para MICHELE.
 
-A mensagem WhatsApp para **MICHELE CRISTIANE JOVINO SILVA** foi **enviada com sucesso** pelo n8n, porém o **registro do contato falhou** devido a um erro de foreign key no banco de dados.
+### Problema 2: Página de Cobrança não atualiza em tempo real
+Após enviar uma mensagem WhatsApp, o histórico de tentativas não é atualizado automaticamente. O usuário precisa atualizar manualmente a página.
 
-### Erro nos Logs
+**Causa:** O `fetchAttempts` só é executado quando o `selectedCustomer` muda, mas após o envio da mensagem, o cliente selecionado permanece o mesmo.
 
-```
-Error registering attempt: {
-  code: "23503",
-  details: 'Key (invoice_id)=(2f44c1c9-9c8b-4c76-b56c-527f5242cafd) is not present in table "invoices".',
-  message: 'insert or update on table "collection_attempts" violates foreign key constraint "collection_attempts_invoice_id_fkey"'
-}
-```
-
-### Causa Raiz
-
-A tabela `collection_attempts` está configurada com uma foreign key que referencia a tabela `invoices`:
-
-```
-collection_attempts.invoice_id → invoices.id
-```
-
-**Porém**, os dados da fila de cobrança vêm da tabela `operator_contracts`, não de `invoices`. Quando passamos o ID do contrato como `invoice_id`, o banco rejeita porque esse UUID não existe na tabela `invoices`.
+### Problema 3: Página de Detalhes do Cliente sem histórico
+A página `CustomerDetail.tsx` exibe um texto fixo "Nenhuma tentativa de cobrança registrada" - **não busca dados reais do banco de dados**.
 
 ---
 
-## Solução
+## Soluções Propostas
 
-Alterar a foreign key da coluna `invoice_id` na tabela `collection_attempts` para referenciar `operator_contracts` em vez de `invoices`.
+### Solução 1: Atualização Automática na Página de Cobrança
 
-### Opção 1: Alterar a Foreign Key (Recomendado)
+Modificar o hook `useCollection.ts` para expor uma função que força o refetch das tentativas e promessas para o cliente selecionado.
 
-Criar uma migration que:
-1. Remove a constraint antiga (`collection_attempts_invoice_id_fkey`)
-2. Cria uma nova constraint referenciando `operator_contracts`
+**Arquivo:** `src/hooks/useCollection.ts`
 
-### Opção 2: Permitir NULL ou Remover a FK
+**Mudanças:**
+- Adicionar função `refreshHistory` que chama `fetchAttempts` e `fetchPromises`
+- Expor essa função no retorno do hook
 
-Se a tabela `invoices` for usada para outro propósito:
-1. Tornar o campo `invoice_id` nullable
-2. Remover a foreign key constraint completamente
+**Arquivo:** `src/components/collection/MessageTemplates.tsx`
+
+**Mudanças:**
+- Atualizar `onMessageSent` para também refrescar o histórico
+
+**Arquivo:** `src/pages/Collection.tsx`
+
+**Mudanças:**
+- Passar uma função que atualiza tanto a fila quanto o histórico
+
+### Solução 2: Implementar Histórico Real na Página de Detalhes
+
+Criar uma busca de `collection_attempts` e `payment_promises` na página `CustomerDetail.tsx`.
+
+**Arquivo:** `src/hooks/useCustomers.ts`
+
+**Mudanças:**
+- Adicionar busca de `collection_attempts` e `payment_promises` no `useCustomerDetail`
+- Retornar esses dados junto com as informações do cliente
+
+**Arquivo:** `src/pages/CustomerDetail.tsx`
+
+**Mudanças:**
+- Importar e usar o componente `HistoryTimeline` já existente
+- Exibir as tentativas e promessas reais do banco
 
 ---
 
-## Implementacao
+## Fluxo Atualizado
 
-### Migration SQL
-
-```sql
--- Remove a foreign key antiga que referencia 'invoices'
-ALTER TABLE collection_attempts
-DROP CONSTRAINT IF EXISTS collection_attempts_invoice_id_fkey;
-
--- Cria nova foreign key referenciando 'operator_contracts'
-ALTER TABLE collection_attempts
-ADD CONSTRAINT collection_attempts_invoice_id_fkey
-FOREIGN KEY (invoice_id) REFERENCES operator_contracts(id) ON DELETE CASCADE;
+```text
+Usuário envia WhatsApp
+         │
+         ▼
+  ┌─────────────────────┐
+  │ Edge Function       │
+  │ registra tentativa  │
+  └──────────┬──────────┘
+             │
+             ▼
+  ┌─────────────────────┐
+  │ onMessageSent()     │
+  │ chamado             │
+  └──────────┬──────────┘
+             │
+             ▼
+  ┌──────────────────────────┐
+  │ refreshHistory()         │  ← NOVO
+  │ + refreshQueue()         │
+  │ (atualiza histórico      │
+  │  e fila em tempo real)   │
+  └──────────────────────────┘
 ```
 
-### Tabela payment_promises
+---
 
-Verificar se a tabela `payment_promises` também possui a mesma foreign key incorreta e aplicar a mesma correção se necessário.
+## Resumo dos Arquivos a Modificar
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/hooks/useCollection.ts` | Adicionar função `refreshHistory` para forçar refetch de tentativas e promessas |
+| `src/pages/Collection.tsx` | Atualizar `onMessageSent` para também chamar `refreshHistory` |
+| `src/hooks/useCustomers.ts` | Adicionar busca de `collection_attempts` e `payment_promises` no `useCustomerDetail` |
+| `src/pages/CustomerDetail.tsx` | Usar componente `HistoryTimeline` para exibir histórico real |
 
 ---
 
-## Arquivos a Modificar
+## Benefícios
 
-| Arquivo | Acao |
-|---------|------|
-| Nova migration SQL | Criar para corrigir as foreign keys |
+1. **Atualização em tempo real**: Histórico atualiza imediatamente após enviar mensagem
+2. **Histórico completo**: Página de detalhes do cliente mostra todas as tentativas de cobrança
+3. **Consistência**: Mesmo componente `HistoryTimeline` usado em ambas as páginas
+4. **Experiência fluida**: Operador pode fazer cobranças em sequência sem precisar atualizar a página
 
 ---
 
-## Resultado Esperado
+## Sobre MICHELE CRISTIANE JOVINO SILVA
 
-Apos a correcao:
-1. O envio de mensagem WhatsApp continuara funcionando normalmente
-2. O registro de contato sera salvo automaticamente no banco
-3. O historico do cliente sera atualizado em tempo real
+Para registrar a cobrança dela, basta:
+1. Acessar a página de Cobrança
+2. Localizar a cliente MICHELE CRISTIANE JOVINO SILVA
+3. Selecionar um template e enviar novamente
 
+Agora que a foreign key está corrigida, o registro será salvo automaticamente.
