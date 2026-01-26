@@ -1,115 +1,183 @@
 
-# Plano: Remover Polling e Usar Apenas Realtime
 
-## Problema Identificado
-O sistema está fazendo múltiplas chamadas ao webhook externo porque o polling de status está ativo a cada 5 segundos. O webhook deve ser chamado **apenas uma vez** para iniciar a conexão, e depois o Realtime deve detectar quando o status muda para "connected".
+# Plano: Envio de Mensagens WhatsApp via Webhook
 
-## Causa Raiz
-O `useEffect` de polling (linhas 109-115) chama `checkConnectionStatus` a cada 5 segundos, que por sua vez:
-1. Chama `onCheckStatus` 
-2. Que invoca a edge function `instance-webhook` com `action: 'status'`
-3. Que faz uma chamada HTTP ao webhook externo do n8n
+## Objetivo
+Substituir a abertura do WhatsApp Web pelo envio automático de mensagens através de um webhook, utilizando as instâncias WhatsApp conectadas no sistema.
 
-## Solução
-Remover completamente o polling de status e confiar apenas no Supabase Realtime para detectar quando a instância foi conectada.
+## Situação Atual
+- O botão "Abrir WhatsApp" no componente `MessageTemplates` abre o WhatsApp Web com a mensagem pré-preenchida
+- O usuário precisa enviar manualmente
+- Já temos instâncias WhatsApp conectadas no banco de dados
+
+## Solução Proposta
+Criar uma Edge Function que receba os dados da mensagem e chame o webhook do n8n para disparo automático, e atualizar o componente `MessageTemplates` para usar esse fluxo.
+
+---
+
+## Fluxo de Envio
+
+```text
+Usuário seleciona template
+         │
+         ▼
+Usuário clica "Enviar WhatsApp"
+         │
+         ▼
+  ┌─────────────────────┐
+  │ Seleciona instância │  (se houver mais de uma conectada)
+  │ conectada           │
+  └──────────┬──────────┘
+             │
+             ▼
+  ┌─────────────────────┐
+  │ Edge Function       │
+  │ send-whatsapp       │
+  └──────────┬──────────┘
+             │
+             ▼
+  ┌─────────────────────┐
+  │ Webhook n8n         │
+  │ (disparo real)      │
+  └──────────┬──────────┘
+             │
+             ▼
+  ┌─────────────────────┐
+  │ Toast de sucesso    │
+  │ ou erro             │
+  └─────────────────────┘
+```
 
 ---
 
 ## Etapas de Implementação
 
-### 1. Remover o polling de fallback
-Eliminar o `useEffect` que faz polling a cada 5 segundos.
+### 1. Criar Edge Function `send-whatsapp`
 
-### 2. Remover a função checkConnectionStatus
-Já que não será mais usada, pode ser removida.
+**Arquivo:** `supabase/functions/send-whatsapp/index.ts`
 
-### 3. Remover a prop onCheckStatus
-Já que não será mais necessária no componente.
+**Responsabilidades:**
+- Receber os dados da mensagem (telefone, mensagem, instance_id)
+- Validar que a instância está conectada
+- Chamar o webhook do n8n para disparo
+- Retornar sucesso ou erro
 
----
-
-## Fluxo Corrigido
-
-```text
-Usuário clica "Conectar"
-         │
-         ▼
-  ┌─────────────────┐
-  │ onConnect()     │  ← Chamada ÚNICA ao webhook
-  │ (gera QR Code)  │
-  └────────┬────────┘
-           │
-           ▼
-  ┌─────────────────┐     ┌──────────────────────┐
-  │   QR Code       │     │ Realtime Subscription│
-  │   Exibido       │◄────│ (sem polling!)       │
-  └────────┬────────┘     └──────────┬───────────┘
-           │                         │
-           │  (n8n atualiza banco)   │
-           │                         ▼
-           │           status = 'connected'
-           │                         │
-           │◄────────────────────────┘
-           ▼
-  ┌─────────────────┐
-  │  ✓ Conectado    │
-  │  com sucesso    │
-  └─────────────────┘
-```
-
----
-
-## Arquivos a Modificar
-
-### 1. ConnectInstanceDialog.tsx
-- Remover a prop `onCheckStatus` da interface
-- Remover a função `checkConnectionStatus`
-- Remover o `useEffect` de polling (linhas 109-115)
-- Manter apenas o Realtime subscription
-
-### 2. InstanceList.tsx
-- Remover a passagem de `onCheckStatus` para o `ConnectInstanceDialog`
-
----
-
-## Código Resultante (ConnectInstanceDialog.tsx)
-
-As principais mudanças serão:
-
-**Remover da interface:**
-```typescript
-interface ConnectInstanceDialogProps {
-  instance: Instance | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConnect: (instanceId: string, token: string) => Promise<ConnectResult>;
-  // onCheckStatus removido
+**Dados enviados ao webhook:**
+```json
+{
+  "instance_id": "rfe56023e0359b1",
+  "token": "bd7edd56-e98c-46f0-93ea-7e6c058c37d4",
+  "phone": "5511999999999",
+  "message": "Olá João! Identificamos uma pendência..."
 }
 ```
 
-**Remover função e useEffect de polling:**
-```typescript
-// checkConnectionStatus - REMOVIDO
-// useEffect com setInterval - REMOVIDO
+### 2. Atualizar `supabase/config.toml`
+
+Adicionar a configuração da nova Edge Function.
+
+### 3. Criar Hook `useSendWhatsapp`
+
+**Arquivo:** `src/hooks/useSendWhatsapp.ts`
+
+**Responsabilidades:**
+- Buscar instâncias conectadas
+- Função para enviar mensagem via Edge Function
+- Gerenciar estado de loading/erro
+
+### 4. Atualizar Componente `MessageTemplates`
+
+**Arquivo:** `src/components/collection/MessageTemplates.tsx`
+
+**Mudanças:**
+- Adicionar prop `customerPhone` para o número do destinatário
+- Importar e usar o hook `useSendWhatsapp`
+- Substituir `window.open(wa.me...)` por chamada à Edge Function
+- Adicionar seletor de instância (se houver múltiplas conectadas)
+- Mostrar estado de loading durante envio
+- Mostrar toast de sucesso/erro
+
+### 5. Atualizar Página `Collection`
+
+**Arquivo:** `src/pages/Collection.tsx`
+
+**Mudanças:**
+- Passar `customerPhone` para o componente `MessageTemplates`
+
+---
+
+## Detalhes Técnicos
+
+### Edge Function: send-whatsapp
+
+```text
+POST /functions/v1/send-whatsapp
+Authorization: Bearer <user_token>
+
+Body:
+{
+  "instance_id": string,
+  "phone": string,
+  "message": string
+}
+
+Response (sucesso):
+{
+  "success": true,
+  "message_id": string (opcional, se o webhook retornar)
+}
+
+Response (erro):
+{
+  "success": false,
+  "error": string
+}
 ```
 
-**Manter apenas o Realtime:**
-```typescript
-// Supabase Realtime subscription - MANTIDO
-useEffect(() => {
-  if (!open || !instance) return;
+### Webhook URL (n8n)
+```
+https://n8n.srv743366.hstgr.cloud/webhook-test/b6e0f090-6b10-4eb6-a26f-1bc9fd21ae8b
+```
 
-  const channel = supabase
-    .channel(`instance-status-${instance.instance_id}`)
-    .on('postgres_changes', ...)
-    .subscribe();
+### Interface Atualizada do MessageTemplates
 
-  return () => supabase.removeChannel(channel);
-}, [open, instance, onOpenChange]);
+```text
+┌─────────────────────────────────────┐
+│  Templates de Mensagem              │
+├─────────────────────────────────────┤
+│  [Lista de templates WhatsApp]      │
+│  [Lista de templates E-mail]        │
+├─────────────────────────────────────┤
+│  Template selecionado:              │
+│  ┌─────────────────────────────┐    │
+│  │  Conteúdo editável          │    │
+│  │  ...                        │    │
+│  └─────────────────────────────┘    │
+│                                     │
+│  Enviar via: [Instância: whats-8538]│  ← NOVO
+│                                     │
+│  [Copiar]  [Enviar WhatsApp]        │  ← Botão atualizado
+└─────────────────────────────────────┘
 ```
 
 ---
 
-## Resumo das Alterações
-1. **ConnectInstanceDialog.tsx** - Remover polling e prop `onCheckStatus`, manter apenas Realtime
-2. **InstanceList.tsx** - Remover passagem de `onCheckStatus` para o dialog
+## Resumo dos Arquivos a Criar/Modificar
+
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/send-whatsapp/index.ts` | Criar |
+| `supabase/config.toml` | Modificar |
+| `src/hooks/useSendWhatsapp.ts` | Criar |
+| `src/components/collection/MessageTemplates.tsx` | Modificar |
+| `src/pages/Collection.tsx` | Modificar |
+
+---
+
+## Validações e Tratamentos de Erro
+
+1. **Sem instância conectada:** Mostrar alerta pedindo para conectar uma instância em Configurações
+2. **Telefone inválido/ausente:** Mostrar erro informando que o cliente não possui telefone cadastrado
+3. **Erro no webhook:** Mostrar toast com mensagem de erro e opção de tentar novamente
+4. **Sucesso:** Mostrar toast confirmando o envio e registrar a tentativa automaticamente
+
