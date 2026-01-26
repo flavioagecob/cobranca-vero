@@ -18,6 +18,7 @@ export function InstanceList() {
     checkStatus,
     disconnectInstance,
     deleteInstance,
+    refreshInstances,
   } = useInstances();
 
   const [selectedInstance, setSelectedInstance] = useState<Instance | null>(null);
@@ -27,6 +28,14 @@ export function InstanceList() {
   const handleConnect = (instance: Instance) => {
     setSelectedInstance(instance);
     setConnectDialogOpen(true);
+  };
+
+  const handleConnectDialogChange = (open: boolean) => {
+    setConnectDialogOpen(open);
+    // Refresh instances when dialog closes to update status
+    if (!open) {
+      refreshInstances();
+    }
   };
 
   const handleDisconnect = async (instance: Instance) => {
@@ -98,7 +107,7 @@ export function InstanceList() {
       <ConnectInstanceDialog
         instance={selectedInstance}
         open={connectDialogOpen}
-        onOpenChange={setConnectDialogOpen}
+        onOpenChange={handleConnectDialogChange}
         onConnect={connectInstance}
         onCheckStatus={checkStatus}
       />
