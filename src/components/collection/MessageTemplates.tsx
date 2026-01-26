@@ -1,16 +1,20 @@
 import { useState } from 'react';
-import { MessageCircle, Copy, Check } from 'lucide-react';
+import { MessageCircle, Copy, Check, Send, Loader2, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DEFAULT_TEMPLATES, CHANNEL_CONFIG, type MessageTemplate } from '@/types/collection';
+import { useSendWhatsapp } from '@/hooks/useSendWhatsapp';
 import { toast } from 'sonner';
 
 interface MessageTemplatesProps {
   customerName: string;
   customerCpf?: string;
+  customerPhone?: string;
   valorPendente?: number;
   diasAtraso?: number;
   onSelectTemplate?: (content: string) => void;
@@ -19,6 +23,7 @@ interface MessageTemplatesProps {
 export function MessageTemplates({ 
   customerName, 
   customerCpf = '',
+  customerPhone = '',
   valorPendente = 0,
   diasAtraso = 0,
   onSelectTemplate 
@@ -26,6 +31,16 @@ export function MessageTemplates({
   const [selectedTemplate, setSelectedTemplate] = useState<MessageTemplate | null>(null);
   const [editedContent, setEditedContent] = useState('');
   const [copied, setCopied] = useState(false);
+
+  const {
+    connectedInstances,
+    selectedInstanceId,
+    setSelectedInstanceId,
+    sendMessage,
+    isLoading,
+    isFetchingInstances,
+    hasConnectedInstance,
+  } = useSendWhatsapp();
 
   const replaceVariables = (content: string): string => {
     // Extract first name only
@@ -63,15 +78,34 @@ export function MessageTemplates({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleUse = () => {
-    if (onSelectTemplate) {
-      onSelectTemplate(editedContent);
+  const handleSendWhatsapp = async () => {
+    if (!customerPhone) {
+      toast.error('Cliente não possui telefone cadastrado');
+      return;
     }
-    
-    // Open WhatsApp if it's a WhatsApp template
+
+    if (!selectedInstanceId) {
+      toast.error('Selecione uma instância WhatsApp');
+      return;
+    }
+
+    const result = await sendMessage(customerPhone, editedContent);
+
+    if (result.success) {
+      toast.success('Mensagem enviada com sucesso!');
+      if (onSelectTemplate) {
+        onSelectTemplate(editedContent);
+      }
+    } else {
+      toast.error(result.error || 'Erro ao enviar mensagem');
+    }
+  };
+
+  const handleUse = () => {
     if (selectedTemplate?.canal === 'whatsapp') {
-      const encoded = encodeURIComponent(editedContent);
-      window.open(`https://wa.me/?text=${encoded}`, '_blank');
+      handleSendWhatsapp();
+    } else if (onSelectTemplate) {
+      onSelectTemplate(editedContent);
     }
   };
 
@@ -87,6 +121,16 @@ export function MessageTemplates({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* No connected instance warning */}
+        {!isFetchingInstances && !hasConnectedInstance && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Nenhuma instância WhatsApp conectada. Acesse Configurações para conectar uma instância.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Template List */}
         <ScrollArea className="h-[200px]">
           <div className="space-y-2">
@@ -99,7 +143,7 @@ export function MessageTemplates({
                 onClick={() => handleSelectTemplate(template)}
               >
                 <div className="flex items-center gap-2">
-                  <MessageCircle className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                  <MessageCircle className="h-4 w-4 text-primary flex-shrink-0" />
                   <span className="text-sm truncate">{template.nome}</span>
                 </div>
               </Button>
@@ -145,6 +189,41 @@ export function MessageTemplates({
               className="text-sm"
             />
 
+            {/* Instance selector for WhatsApp */}
+            {selectedTemplate.canal === 'whatsapp' && hasConnectedInstance && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Enviar via:
+                </label>
+                <Select
+                  value={selectedInstanceId || ''}
+                  onValueChange={setSelectedInstanceId}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione uma instância" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {connectedInstances.map((instance) => (
+                      <SelectItem key={instance.id} value={instance.instance_id}>
+                        {instance.name} {instance.phone_number ? `(${instance.phone_number})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Phone info */}
+            {selectedTemplate.canal === 'whatsapp' && (
+              <div className="text-xs text-muted-foreground">
+                {customerPhone ? (
+                  <span>Destinatário: {customerPhone}</span>
+                ) : (
+                  <span className="text-destructive">⚠ Cliente sem telefone cadastrado</span>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={handleCopy} className="flex-1">
                 {copied ? (
@@ -159,8 +238,28 @@ export function MessageTemplates({
                   </>
                 )}
               </Button>
-              <Button size="sm" onClick={handleUse} className="flex-1">
-                {selectedTemplate.canal === 'whatsapp' ? 'Abrir WhatsApp' : 'Usar Mensagem'}
+              <Button 
+                size="sm" 
+                onClick={handleUse} 
+                className="flex-1"
+                disabled={
+                  isLoading || 
+                  (selectedTemplate.canal === 'whatsapp' && (!hasConnectedInstance || !customerPhone))
+                }
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    Enviando...
+                  </>
+                ) : selectedTemplate.canal === 'whatsapp' ? (
+                  <>
+                    <Send className="h-4 w-4 mr-1" />
+                    Enviar WhatsApp
+                  </>
+                ) : (
+                  'Usar Mensagem'
+                )}
               </Button>
             </div>
           </div>

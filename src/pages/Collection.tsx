@@ -186,6 +186,7 @@ export default function Collection() {
                     <MessageTemplates
                       customerName={selectedCustomer.customer_name}
                       customerCpf={selectedCustomer.customer_cpf_cnpj}
+                      customerPhone={selectedCustomer.customer_phone || ''}
                       valorPendente={selectedCustomer.total_pendente}
                       diasAtraso={selectedCustomer.max_dias_atraso}
                     />
