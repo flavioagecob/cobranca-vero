@@ -1,182 +1,132 @@
 
+Objetivo: corrigir de forma definitiva (1) o “Acesso negado” logo após login do operador e (2) a lentidão introduzida após as últimas alterações, sem comprometer segurança (roles continuam na tabela `user_roles`).
 
-# Plano: Corrigir Acesso Negado + Edição de Usuários
+## O que encontrei (causa raiz)
 
-## Problema 1: Acesso Negado (Race Condition)
+### 1) Operador cai em “Acesso Negado” logo após login
+No `src/pages/Login.tsx` existe este trecho:
 
-### Causa Raiz
+- `const from = location.state?.from?.pathname || '/dashboard';`
+- Ao logar com sucesso: `navigate(from, { replace: true });`
 
-No `AuthContext.tsx`, o `isLoading` é setado como `false` antes que o `fetchUserData` termine de carregar o `role`. Quando `HomeRedirect` verifica o `role`, ele ainda é `null`, então o usuário é redirecionado para `/dashboard` (comportamento padrão).
+Ou seja: quando o operador entra pela página inicial/login (sem `state.from`), o app sempre manda para **/dashboard**.  
+Como `/dashboard` é restrito a `admin/supervisor`, o operador cai em **/unauthorized** imediatamente.
 
-```text
-Login bem-sucedido
-        |
-        v
-  onAuthStateChange dispara
-        |
-        v
-  setTimeout(fetchUserData, 0)  <-- Agendado, não executado
-        |
-        v
-  setIsLoading(false)  <-- Problema! Role ainda não carregou
-        |
-        v
-  HomeRedirect executa com role = null
-        |
-        v
-  Vai para /dashboard (default)
-        |
-        v
-  ACESSO NEGADO (cobrador não pode acessar)
-```
+Isso explica exatamente o comportamento que você marcou: “Logo após login” e “Página inicial/login”.
 
-### Solucao
+### 2) Lentidão (páginas lentas)
+No `src/contexts/AuthContext.tsx`, o `onAuthStateChange` está com callback `async` e faz queries Supabase dentro dele:
 
-1. **AuthContext.tsx**: Aguardar o `fetchUserData` completar antes de setar `isLoading = false`
-2. **HomeRedirect.tsx**: Aguardar o `role` carregar (além de `isLoading`)
-3. **Unauthorized.tsx**: Redirecionar de volta para `/` ao invés de `/dashboard`
-
----
-
-## Problema 2: Edição de Usuários
-
-### Componentes a Criar
-
-| Arquivo | Descricao |
-|---------|-----------|
-| `src/components/settings/EditUserDialog.tsx` | Dialog para editar usuario existente |
-| `supabase/functions/update-user/index.ts` | Edge function para atualizar email/senha |
-
-### Modificacoes
-
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/components/settings/UserList.tsx` | Adicionar botao de editar em cada linha |
-| `src/hooks/useUsers.ts` | Adicionar funcao `updateUser` |
-
----
-
-## Detalhes Tecnicos
-
-### 1. Corrigir AuthContext (Race Condition)
-
-```typescript
-// Antes (problema):
-if (currentSession?.user) {
-  setTimeout(() => {
-    fetchUserData(currentSession.user.id);
-  }, 0);
-}
-setIsLoading(false);  // Role ainda nao carregou!
-
-// Depois (corrigido):
-if (currentSession?.user) {
-  await fetchUserData(currentSession.user.id);
-}
-setIsLoading(false);  // Agora o role ja carregou
-```
-
-### 2. Corrigir HomeRedirect (Aguardar Role)
-
-```typescript
-// Adicionar verificacao se role esta carregando
-if (isLoading) {
-  return <Loader />;
-}
-
-// NOVO: Se session existe mas role ainda nao carregou, aguardar
-if (session && role === null) {
-  return <Loader />;
-}
-```
-
-### 3. Corrigir Unauthorized (Botao)
-
-```typescript
-// Antes:
-<Button onClick={() => navigate('/dashboard')}>
-
-// Depois:
-<Button onClick={() => navigate('/')}>
-```
-
-### 4. Edge Function update-user
-
-A funcao vai:
-- Receber: `user_id`, `full_name`, `email`, `phone`, `role`, `password` (opcional)
-- Verificar se quem chama e admin
-- Atualizar `users_profile` (nome, phone)
-- Atualizar `user_roles` (role)
-- Se email mudou: `adminClient.auth.admin.updateUserById(user_id, { email })`
-- Se senha fornecida: `adminClient.auth.admin.updateUserById(user_id, { password })`
-
-### 5. EditUserDialog
-
-Campos do formulario:
-- Nome completo (obrigatorio)
-- Email (obrigatorio)
-- Telefone (opcional)
-- Tipo: Administrador / Operador
-- Nova senha (opcional, campo vazio = nao altera)
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/contexts/AuthContext.tsx` | Aguardar fetchUserData completar |
-| `src/components/HomeRedirect.tsx` | Aguardar role carregar |
-| `src/pages/Unauthorized.tsx` | Redirecionar para `/` |
-| `src/components/settings/UserList.tsx` | Adicionar botao editar |
-| `src/hooks/useUsers.ts` | Adicionar updateUser |
-
-## Arquivos a Criar
-
-| Arquivo | Tipo |
-|---------|------|
-| `src/components/settings/EditUserDialog.tsx` | Componente React |
-| `supabase/functions/update-user/index.ts` | Edge Function |
-
-## Migrations SQL
-
-Adicionar politica RLS para admins poderem fazer UPDATE em `users_profile`.
-
----
-
-## Fluxo Corrigido de Login
-
-```text
-Login bem-sucedido
-        |
-        v
-  onAuthStateChange dispara
-        |
-        v
-  await fetchUserData()  <-- Aguarda completar
-        |
-        v
-  role = 'cobrador' (carregado)
-        |
-        v
+```ts
+supabase.auth.onAuthStateChange(async (event, currentSession) => {
+  ...
+  await fetchUserData(...)
   setIsLoading(false)
-        |
-        v
-  HomeRedirect executa com role = 'cobrador'
-        |
-        v
-  Redireciona para /collection
-        |
-        v
-  SUCESSO!
+})
 ```
 
----
+Esse padrão costuma causar travamentos/lentidão (deadlocks/espera desnecessária) porque:
+- o listener de auth pode disparar com frequência (ex: refresh de token),
+- e chamadas Supabase dentro do callback podem bloquear o fluxo de atualização do estado de sessão.
 
-## Resultado Esperado
+Além disso, hoje o AuthContext faz “duas inicializações”: `onAuthStateChange` + `getSession()` (duplica trabalho).
 
-1. Operadores fazem login e vao direto para `/collection`
-2. Administradores fazem login e vao para `/dashboard`
-3. Administradores podem editar usuarios existentes (nome, email, telefone, tipo, senha)
-4. Botao "Voltar" na pagina de acesso negado leva para a home correta
+## Estratégia definitiva (o que vamos mudar)
 
+### A) Consertar o redirecionamento pós-login (definitivo)
+Mudaremos o fluxo do `Login.tsx` para **não mandar por padrão para /dashboard**.
+
+Opções seguras; vamos implementar a mais robusta:
+1) Após login bem-sucedido, navegar para `/` (em vez de `from`).
+2) Deixar o `/` decidir o destino via `HomeRedirect` (com role carregada).
+3) Opcionalmente preservar “from” somente quando fizer sentido (ex: usuário tentou `/customers/123`), mas com validação por role.
+
+Resultado esperado:
+- Operador: login -> `/` -> HomeRedirect -> `/collection`
+- Admin/Supervisor: login -> `/` -> HomeRedirect -> `/dashboard`
+
+### B) Refatorar AuthContext para eliminar lentidão/deadlocks
+Vamos reestruturar o AuthContext para seguir um modelo “state machine” simples e performático:
+
+1) `onAuthStateChange` **100% síncrono**:
+   - apenas atualizar `session` e `user`
+   - marcar que a autenticação inicial foi resolvida (ex: `authInitialized = true`)
+   - não chamar `fetchUserData` ali
+
+2) Buscar `profile` e `role` em um `useEffect` separado, disparado por `user?.id`:
+   - quando `userId` muda:
+     - resetar `profile/role`
+     - setar `userDataLoading = true`
+     - buscar `users_profile` e `user_roles`
+     - setar `userDataLoading = false`
+   - usar um `requestId` (ref) para ignorar respostas antigas (evita corrida quando troca usuário rapidamente)
+
+3) Evitar duplicidade:
+   - ou removemos o `getSession()` e confiamos no evento inicial do `onAuthStateChange` (se disponível),
+   - ou mantemos `getSession()` mas com um guard para não “dobrar” o carregamento.
+
+4) Definir claramente estados:
+   - `isLoading = !authInitialized || userDataLoading`
+   - criar um indicador para “role carregada mas não existe” (por exemplo `userDataLoaded` + `role === null`)
+     - isso evita spinner infinito e melhora diagnósticos.
+
+### C) Fortalecer as regras do ProtectedRoute e HomeRedirect
+Hoje `ProtectedRoute` só bloqueia quando `role` existe. Vamos deixar isso mais correto:
+
+- Se tem `session` mas ainda estamos carregando dados do usuário: mostrar loader
+- Se dados carregaram e `role` está ausente (não existe linha em `user_roles`): mandar para `/unauthorized` com mensagem “usuário sem permissão/role não atribuída”
+- Se `allowedRoles` existe e a role não está na lista: `/unauthorized`
+
+E no `HomeRedirect`:
+- se não autenticado -> `/login`
+- se autenticado e ainda carregando role -> loader
+- se role ausente -> `/unauthorized`
+- role `cobrador` -> `/collection`
+- role `admin/supervisor` -> `/dashboard`
+
+## Sequência de implementação (passo a passo)
+
+1) Ajustar `src/pages/Login.tsx`
+   - trocar `from` default de `'/dashboard'` para `'/'`
+   - ao sucesso de login, navegar para `'/'` (ou aguardar role e decidir)
+   - (opcional) manter `from` somente se for uma rota permitida ao role (validação após role carregar)
+
+2) Refatorar `src/contexts/AuthContext.tsx`
+   - tornar callback do `onAuthStateChange` síncrono
+   - mover carregamento de `profile/role` para `useEffect` por `userId`
+   - adicionar `authInitialized`, `userDataLoading`, `userDataLoaded`
+   - evitar chamadas duplicadas (onAuthStateChange + getSession) com guard
+
+3) Atualizar `src/components/ProtectedRoute.tsx`
+   - bloquear corretamente enquanto role não carregou
+   - tratar role ausente como acesso negado (usuário sem role)
+
+4) Atualizar `src/components/HomeRedirect.tsx`
+   - usar o novo estado de loading/loaded
+   - mandar role ausente para `/unauthorized` ao invés de loader infinito
+
+5) Testes manuais (checklist)
+   - Operador entra pela página inicial -> vai para `/collection` (sem passar por unauthorized)
+   - Admin entra -> `/dashboard`
+   - Supervisor entra -> `/dashboard`
+   - Operador tentando acessar `/dashboard` diretamente:
+     - se não logado: vai login
+     - após login: deve cair em `/collection` (ou `/unauthorized` dependendo da escolha de preservar “from”; preferível mandar para home do role)
+   - Navegação geral: sem travamentos; conferir que não há várias requisições repetidas de `users_profile/user_roles` a cada refresh de token
+
+## Observações de performance adicionais (se ainda houver lentidão)
+Se após isso ainda ficar lento, os próximos pontos a avaliar (sem mudar regra de roles):
+- reduzir o número de selects no bootstrap (buscar apenas colunas necessárias)
+- garantir que telas pesadas (ex: listas) não estejam fazendo fetch extra em loop
+- revisar hooks (ex: `useCollection`) para confirmar que não está refazendo queries com alta frequência
+
+## Entregáveis (arquivos que serão alterados)
+- `src/pages/Login.tsx` (corrigir redirecionamento pós-login)
+- `src/contexts/AuthContext.tsx` (refatoração para remover deadlock/lentidão e robustez de carregamento)
+- `src/components/ProtectedRoute.tsx` (bloqueio correto com role carregada)
+- `src/components/HomeRedirect.tsx` (decisão definitiva e tratamento de role ausente)
+
+Resultado final esperado:
+- Operador não cai mais em “Acesso negado” ao entrar (definitivo, mesmo acessando via login/raiz)
+- Redução perceptível de lentidão por remover chamadas Supabase de dentro do callback de auth e eliminar duplicidades de carregamento
+- Fluxo de autenticação/role determinístico e estável (sem race condition e sem spinner infinito)
