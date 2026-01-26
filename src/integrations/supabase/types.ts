@@ -93,7 +93,7 @@ export type Database = {
             foreignKeyName: "collection_attempts_invoice_id_fkey"
             columns: ["invoice_id"]
             isOneToOne: false
-            referencedRelation: "invoices"
+            referencedRelation: "operator_contracts"
             referencedColumns: ["id"]
           },
         ]
@@ -399,7 +399,7 @@ export type Database = {
             foreignKeyName: "payment_promises_invoice_id_fkey"
             columns: ["invoice_id"]
             isOneToOne: false
-            referencedRelation: "invoices"
+            referencedRelation: "operator_contracts"
             referencedColumns: ["id"]
           },
         ]
