@@ -23,10 +23,20 @@ interface CreateUserData {
   phone?: string;
 }
 
+interface UpdateUserData {
+  user_id: string;
+  email: string;
+  full_name: string;
+  role: AppRole;
+  phone?: string;
+  password?: string;
+}
+
 export function useUsers() {
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
 
   const fetchUsers = async () => {
@@ -120,6 +130,44 @@ export function useUsers() {
     }
   };
 
+  const updateUser = async (data: UpdateUserData): Promise<boolean> => {
+    try {
+      setIsUpdating(true);
+
+      const { data: result, error } = await supabase.functions.invoke('update-user', {
+        body: data,
+      });
+
+      if (error) {
+        console.error('Error updating user:', error);
+        throw new Error(error.message || 'Failed to update user');
+      }
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      toast({
+        title: 'Usuário atualizado',
+        description: `O usuário ${data.full_name} foi atualizado com sucesso.`,
+      });
+
+      // Refresh the user list
+      await fetchUsers();
+      return true;
+    } catch (error: any) {
+      console.error('Error updating user:', error);
+      toast({
+        title: 'Erro ao atualizar usuário',
+        description: error.message || 'Não foi possível atualizar o usuário.',
+        variant: 'destructive',
+      });
+      return false;
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const getRoleLabel = (role: AppRole): string => {
     switch (role) {
       case 'admin':
@@ -141,7 +189,9 @@ export function useUsers() {
     users,
     isLoading,
     isCreating,
+    isUpdating,
     createUser,
+    updateUser,
     refreshUsers: fetchUsers,
     getRoleLabel,
   };

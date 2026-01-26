@@ -68,39 +68,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    let isMounted = true;
+
     // Set up auth state listener BEFORE checking session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        if (!isMounted) return;
+        
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         
         if (currentSession?.user) {
-          // Use setTimeout to prevent potential race conditions
-          setTimeout(() => {
-            fetchUserData(currentSession.user.id);
-          }, 0);
+          // Await fetchUserData to ensure role is loaded before setting isLoading to false
+          await fetchUserData(currentSession.user.id);
         } else {
           setProfile(null);
           setRole(null);
         }
         
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     );
 
     // Check for existing session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+    const initializeAuth = async () => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      
+      if (!isMounted) return;
+      
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       
       if (currentSession?.user) {
-        fetchUserData(currentSession.user.id);
+        await fetchUserData(currentSession.user.id);
       }
       
-      setIsLoading(false);
-    });
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
