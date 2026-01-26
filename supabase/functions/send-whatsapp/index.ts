@@ -40,8 +40,8 @@ Deno.serve(async (req) => {
     }
 
     // Parse request body
-    const { instance_id, phone, message } = await req.json();
-    console.log('Received request:', { instance_id, phone, message: message?.substring(0, 50) + '...' });
+    const { instance_id, phone, message, customer_id, invoice_id } = await req.json();
+    console.log('Received request:', { instance_id, phone, message: message?.substring(0, 50) + '...', customer_id, invoice_id });
 
     // Validate required fields
     if (!instance_id || !phone || !message) {
@@ -118,11 +118,38 @@ Deno.serve(async (req) => {
       responseData = { raw: webhookData };
     }
 
+    // Register collection attempt if customer_id and invoice_id are provided
+    let attemptId: string | null = null;
+    if (customer_id && invoice_id) {
+      console.log('Registering collection attempt...');
+      const { data: attemptData, error: attemptError } = await supabase
+        .from('collection_attempts')
+        .insert({
+          customer_id,
+          invoice_id,
+          collector_id: user.id,
+          channel: 'whatsapp',
+          status: 'sucesso',
+          notes: 'Mensagem enviada automaticamente via template',
+        })
+        .select('id')
+        .single();
+
+      if (attemptError) {
+        console.error('Error registering attempt:', attemptError);
+        // Don't fail the request, just log the error
+      } else {
+        attemptId = attemptData?.id;
+        console.log('Collection attempt registered:', attemptId);
+      }
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Mensagem enviada com sucesso',
-        data: responseData
+        data: responseData,
+        attempt_id: attemptId
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
