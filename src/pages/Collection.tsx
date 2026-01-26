@@ -8,6 +8,7 @@ import { CustomerInfoCard } from '@/components/collection/CustomerInfoCard';
 import { AttemptForm, type AttemptFormData } from '@/components/collection/AttemptForm';
 import { MessageTemplates } from '@/components/collection/MessageTemplates';
 import { HistoryTimeline } from '@/components/collection/HistoryTimeline';
+import { CollectionStatsCards } from '@/components/collection/CollectionStatsCards';
 import { toast } from 'sonner';
 import type { AttemptChannel } from '@/types/collection';
 
@@ -17,6 +18,7 @@ export default function Collection() {
     selectedCustomer,
     attempts,
     promises,
+    stats,
     isLoading,
     error,
     filters,
@@ -128,6 +130,9 @@ export default function Collection() {
         </div>
       </div>
 
+      {/* Stats Dashboard */}
+      <CollectionStatsCards stats={stats} isLoading={isLoading} />
+
       {/* Error */}
       {error && (
         <div className="rounded-md bg-destructive/10 p-4 text-destructive text-sm">
@@ -136,7 +141,7 @@ export default function Collection() {
       )}
 
       {/* Main Content */}
-      <div className="grid gap-4 lg:grid-cols-12 h-[calc(100vh-220px)]">
+      <div className="grid gap-4 lg:grid-cols-12 h-[calc(100vh-300px)]">
         {/* Queue Sidebar */}
         <div className="lg:col-span-3 h-full">
           <CollectionQueue
