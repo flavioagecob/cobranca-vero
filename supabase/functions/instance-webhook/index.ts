@@ -6,8 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// TODO: Configure these webhook URLs
-const WEBHOOK_BASE_URL = Deno.env.get('INSTANCE_WEBHOOK_URL') || '';
+// Webhook URLs
+const WEBHOOK_CREATE_URL = 'https://n8n.srv743366.hstgr.cloud/webhook/whats-instance';
+const WEBHOOK_CONNECT_URL = 'https://n8n.srv743366.hstgr.cloud/webhook/2cbcb10a-8584-4edd-b109-da71d825f14c';
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -54,19 +55,36 @@ serve(async (req) => {
           );
         }
 
+        console.log(`[instance-webhook] Creating instance with name: ${name}`);
+
         // Call external webhook to create instance
-        // For now, we'll simulate the response
-        // TODO: Replace with actual webhook call when URL is provided
-        const webhookResponse = WEBHOOK_BASE_URL
-          ? await fetch(`${WEBHOOK_BASE_URL}/create`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name }),
-            }).then(r => r.json())
-          : {
-              instance_id: `inst_${crypto.randomUUID().slice(0, 8)}`,
-              token: crypto.randomUUID(),
-            };
+        const webhookRes = await fetch(WEBHOOK_CREATE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+
+        const webhookText = await webhookRes.text();
+        console.log(`[instance-webhook] Create webhook response: ${webhookText}`);
+
+        let webhookResponse;
+        try {
+          webhookResponse = JSON.parse(webhookText);
+        } catch {
+          console.error('[instance-webhook] Failed to parse webhook response');
+          return new Response(
+            JSON.stringify({ success: false, error: 'Resposta inválida do webhook' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (!webhookResponse.instance_id || !webhookResponse.token) {
+          console.error('[instance-webhook] Missing instance_id or token in response');
+          return new Response(
+            JSON.stringify({ success: false, error: 'Resposta do webhook incompleta' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
 
         // Save to database
         const { data: instance, error: insertError } = await supabase
@@ -89,6 +107,8 @@ serve(async (req) => {
           );
         }
 
+        console.log(`[instance-webhook] Instance created successfully: ${instance.id}`);
+
         return new Response(
           JSON.stringify({ success: true, instance }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -103,6 +123,8 @@ serve(async (req) => {
           );
         }
 
+        console.log(`[instance-webhook] Connecting instance: ${instance_id}`);
+
         // Update status to connecting
         await supabase
           .from('instances')
@@ -110,20 +132,51 @@ serve(async (req) => {
           .eq('instance_id', instance_id);
 
         // Call external webhook to get QR code
-        // TODO: Replace with actual webhook call when URL is provided
-        const webhookResponse = WEBHOOK_BASE_URL
-          ? await fetch(`${WEBHOOK_BASE_URL}/connect`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ instance_id, token }),
-            }).then(r => r.json())
-          : {
-              // Placeholder QR code (a simple black square encoded as base64)
-              qr_code_base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-            };
+        const webhookRes = await fetch(WEBHOOK_CONNECT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ instance_id, token }),
+        });
+
+        const webhookText = await webhookRes.text();
+        console.log(`[instance-webhook] Connect webhook response length: ${webhookText.length}`);
+
+        let webhookResponse;
+        try {
+          webhookResponse = JSON.parse(webhookText);
+        } catch {
+          console.error('[instance-webhook] Failed to parse connect webhook response');
+          return new Response(
+            JSON.stringify({ success: false, error: 'Resposta inválida do webhook de conexão' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Check if already connected
+        if (webhookResponse.status === 'connected') {
+          await supabase
+            .from('instances')
+            .update({ 
+              status: 'connected',
+              phone_number: webhookResponse.phone_number || null,
+            })
+            .eq('instance_id', instance_id);
+
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              status: 'connected',
+              phone_number: webhookResponse.phone_number,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
 
         return new Response(
-          JSON.stringify({ success: true, qr_code_base64: webhookResponse.qr_code_base64 }),
+          JSON.stringify({ 
+            success: true, 
+            qr_code_base64: webhookResponse.qr_code_base64 || webhookResponse.qrcode || webhookResponse.qr,
+          }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -136,24 +189,38 @@ serve(async (req) => {
           );
         }
 
-        // Call external webhook to check status
-        // TODO: Replace with actual webhook call when URL is provided
-        const webhookResponse = WEBHOOK_BASE_URL
-          ? await fetch(`${WEBHOOK_BASE_URL}/status?instance_id=${instance_id}&token=${token}`, {
-              method: 'GET',
-            }).then(r => r.json())
-          : {
-              status: 'connecting', // Simulated - would be 'connected' with phone_number when connected
-              phone_number: null,
-            };
+        console.log(`[instance-webhook] Checking status for: ${instance_id}`);
+
+        // Call the connect webhook to check status (it may return status instead of QR)
+        const webhookRes = await fetch(WEBHOOK_CONNECT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ instance_id, token, action: 'status' }),
+        });
+
+        const webhookText = await webhookRes.text();
+        console.log(`[instance-webhook] Status webhook response: ${webhookText}`);
+
+        let webhookResponse;
+        try {
+          webhookResponse = JSON.parse(webhookText);
+        } catch {
+          return new Response(
+            JSON.stringify({ success: true, status: 'connecting' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const status = webhookResponse.status || 'connecting';
+        const phoneNumber = webhookResponse.phone_number || webhookResponse.phoneNumber || null;
 
         // If connected, update the database
-        if (webhookResponse.status === 'connected') {
+        if (status === 'connected') {
           await supabase
             .from('instances')
             .update({ 
               status: 'connected',
-              phone_number: webhookResponse.phone_number,
+              phone_number: phoneNumber,
             })
             .eq('instance_id', instance_id);
         }
@@ -161,8 +228,8 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({ 
             success: true, 
-            status: webhookResponse.status,
-            phone_number: webhookResponse.phone_number,
+            status,
+            phone_number: phoneNumber,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -176,14 +243,17 @@ serve(async (req) => {
           );
         }
 
-        // Call external webhook to disconnect
-        // TODO: Replace with actual webhook call when URL is provided
-        if (WEBHOOK_BASE_URL) {
-          await fetch(`${WEBHOOK_BASE_URL}/disconnect`, {
+        console.log(`[instance-webhook] Disconnecting instance: ${instance_id}`);
+
+        // Call the connect webhook with disconnect action
+        try {
+          await fetch(WEBHOOK_CONNECT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ instance_id, token }),
+            body: JSON.stringify({ instance_id, token, action: 'disconnect' }),
           });
+        } catch (e) {
+          console.error('[instance-webhook] Disconnect webhook error:', e);
         }
 
         // Update database
