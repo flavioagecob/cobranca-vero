@@ -1,114 +1,168 @@
 
-# Plano: Corrigir Exibição do Histórico de Cobrança
 
-## Problemas Identificados
+# Plano: Manter Seleção + Dashboard de Estatísticas + Indicador de Cobrança
 
-### Problema 1: Cliente MICHELE CRISTIANE JOVINO SILVA
-A cobrança foi disparada **antes** da correção da foreign key, por isso falhou. Após a correção, os disparos para JARBAS e PEDRO funcionaram perfeitamente. Para resolver, basta enviar novamente a mensagem para MICHELE.
+## Problema Principal
 
-### Problema 2: Página de Cobrança não atualiza em tempo real
-Após enviar uma mensagem WhatsApp, o histórico de tentativas não é atualizado automaticamente. O usuário precisa atualizar manualmente a página.
+Quando `refreshQueue()` é chamado após uma cobrança, a função `fetchQueue` sempre seleciona o primeiro cliente da lista (linha 189-191), ignorando o cliente que estava selecionado.
 
-**Causa:** O `fetchAttempts` só é executado quando o `selectedCustomer` muda, mas após o envio da mensagem, o cliente selecionado permanece o mesmo.
+## Soluções
 
-### Problema 3: Página de Detalhes do Cliente sem histórico
-A página `CustomerDetail.tsx` exibe um texto fixo "Nenhuma tentativa de cobrança registrada" - **não busca dados reais do banco de dados**.
+### 1. Manter Cliente Selecionado Após Atualização
 
----
-
-## Soluções Propostas
-
-### Solução 1: Atualização Automática na Página de Cobrança
-
-Modificar o hook `useCollection.ts` para expor uma função que força o refetch das tentativas e promessas para o cliente selecionado.
+Modificar a função `fetchQueue` para preservar o cliente selecionado se ele ainda existir na nova lista.
 
 **Arquivo:** `src/hooks/useCollection.ts`
 
-**Mudanças:**
-- Adicionar função `refreshHistory` que chama `fetchAttempts` e `fetchPromises`
-- Expor essa função no retorno do hook
+**Mudancas:**
+- Guardar o `customer_id` do cliente selecionado antes de atualizar
+- Apos construir a nova lista, verificar se o cliente anterior ainda existe
+- Se existir, manter a selecao nele; se nao, selecionar o primeiro
 
-**Arquivo:** `src/components/collection/MessageTemplates.tsx`
+### 2. Dashboard de Estatísticas na Pagina de Cobranca
 
-**Mudanças:**
-- Atualizar `onMessageSent` para também refrescar o histórico
+Adicionar cards de estatísticas no topo da pagina mostrando:
+- Total de clientes na fila
+- Clientes já cobrados (hoje/total)
+- Valor total pendente
+- Taxa de contato
+
+**Arquivo:** `src/hooks/useCollection.ts`
+
+**Mudancas:**
+- Adicionar busca de estatísticas de cobranças (quantos clientes foram contatados)
+- Retornar `stats` no hook
 
 **Arquivo:** `src/pages/Collection.tsx`
 
-**Mudanças:**
-- Passar uma função que atualiza tanto a fila quanto o histórico
+**Mudancas:**
+- Adicionar componente de cards de estatísticas abaixo do header
 
-### Solução 2: Implementar Histórico Real na Página de Detalhes
+### 3. Ícone de Cliente Ja Cobrado
 
-Criar uma busca de `collection_attempts` e `payment_promises` na página `CustomerDetail.tsx`.
+Adicionar um ícone visual (checkmark verde) nos clientes que já possuem pelo menos uma tentativa de cobrança registrada.
 
-**Arquivo:** `src/hooks/useCustomers.ts`
+**Arquivo:** `src/types/collection.ts`
 
-**Mudanças:**
-- Adicionar busca de `collection_attempts` e `payment_promises` no `useCustomerDetail`
-- Retornar esses dados junto com as informações do cliente
+**Mudancas:**
+- Adicionar campo `has_attempt: boolean` ao `CollectionQueueItem`
 
-**Arquivo:** `src/pages/CustomerDetail.tsx`
+**Arquivo:** `src/hooks/useCollection.ts`
 
-**Mudanças:**
-- Importar e usar o componente `HistoryTimeline` já existente
-- Exibir as tentativas e promessas reais do banco
+**Mudancas:**
+- Buscar os `customer_id`s que ja possuem tentativas de cobranca
+- Popular o campo `has_attempt` e `ultima_tentativa` na construcao da fila
+
+**Arquivo:** `src/components/collection/CollectionQueue.tsx`
+
+**Mudancas:**
+- Importar ícone `CheckCircle` do lucide-react
+- Exibir o ícone ao lado do nome quando `has_attempt === true`
 
 ---
 
-## Fluxo Atualizado
+## Fluxo Corrigido
 
 ```text
-Usuário envia WhatsApp
-         │
-         ▼
-  ┌─────────────────────┐
-  │ Edge Function       │
-  │ registra tentativa  │
-  └──────────┬──────────┘
-             │
-             ▼
-  ┌─────────────────────┐
-  │ onMessageSent()     │
-  │ chamado             │
-  └──────────┬──────────┘
-             │
-             ▼
-  ┌──────────────────────────┐
-  │ refreshHistory()         │  ← NOVO
-  │ + refreshQueue()         │
-  │ (atualiza histórico      │
-  │  e fila em tempo real)   │
-  └──────────────────────────┘
+Usuario envia WhatsApp
+         |
+         v
+  +---------------------+
+  | refreshHistory()    |
+  | (atualiza timeline) |
+  +----------+----------+
+             |
+             v
+  +---------------------+
+  | refreshQueue()      |
+  | COM preservacao     |  <-- CORRIGIDO
+  | do cliente atual    |
+  +----------+----------+
+             |
+             v
+  Cliente permanece selecionado
+  + icone de "cobrado" aparece
 ```
 
 ---
 
 ## Resumo dos Arquivos a Modificar
 
-| Arquivo | Mudança |
+| Arquivo | Mudanca |
 |---------|---------|
-| `src/hooks/useCollection.ts` | Adicionar função `refreshHistory` para forçar refetch de tentativas e promessas |
-| `src/pages/Collection.tsx` | Atualizar `onMessageSent` para também chamar `refreshHistory` |
-| `src/hooks/useCustomers.ts` | Adicionar busca de `collection_attempts` e `payment_promises` no `useCustomerDetail` |
-| `src/pages/CustomerDetail.tsx` | Usar componente `HistoryTimeline` para exibir histórico real |
+| `src/types/collection.ts` | Adicionar campo `has_attempt: boolean` ao `CollectionQueueItem` |
+| `src/hooks/useCollection.ts` | 1) Preservar cliente selecionado apos refresh. 2) Buscar estatísticas. 3) Popular `has_attempt` |
+| `src/components/collection/CollectionQueue.tsx` | Exibir icone CheckCircle para clientes ja cobrados |
+| `src/pages/Collection.tsx` | Adicionar cards de estatísticas no topo |
+
+---
+
+## Detalhes Técnicos
+
+### Logica de Preservacao do Cliente
+
+```typescript
+// Antes de atualizar a queue, salvar o ID atual
+const currentSelectedId = selectedCustomer?.customer_id;
+
+// Apos construir queueItems...
+if (queueItems.length > 0) {
+  // Tentar encontrar o cliente anteriormente selecionado
+  const previousIndex = currentSelectedId 
+    ? queueItems.findIndex(c => c.customer_id === currentSelectedId)
+    : -1;
+    
+  if (previousIndex >= 0) {
+    // Manter o mesmo cliente selecionado
+    setSelectedCustomer(queueItems[previousIndex]);
+    setSelectedIndex(previousIndex);
+  } else {
+    // Selecionar o primeiro se o anterior nao existe mais
+    setSelectedCustomer(queueItems[0]);
+    setSelectedIndex(0);
+  }
+}
+```
+
+### Busca de Clientes Cobrados
+
+```typescript
+// Buscar todos os customer_ids que ja tem tentativas
+const { data: attemptedCustomers } = await supabase
+  .from('collection_attempts')
+  .select('customer_id, created_at')
+  .order('created_at', { ascending: false });
+
+// Criar um Map para lookup rapido
+const attemptMap = new Map<string, string>();
+attemptedCustomers?.forEach(a => {
+  if (!attemptMap.has(a.customer_id)) {
+    attemptMap.set(a.customer_id, a.created_at);
+  }
+});
+
+// Ao construir cada item da fila:
+has_attempt: attemptMap.has(customer.id),
+ultima_tentativa: attemptMap.get(customer.id) || null,
+```
+
+### Estrutura de Estatísticas
+
+```typescript
+interface CollectionStats {
+  totalNaFila: number;
+  cobradosHoje: number;
+  cobradosTotal: number;
+  valorTotalPendente: number;
+}
+```
 
 ---
 
 ## Benefícios
 
-1. **Atualização em tempo real**: Histórico atualiza imediatamente após enviar mensagem
-2. **Histórico completo**: Página de detalhes do cliente mostra todas as tentativas de cobrança
-3. **Consistência**: Mesmo componente `HistoryTimeline` usado em ambas as páginas
-4. **Experiência fluida**: Operador pode fazer cobranças em sequência sem precisar atualizar a página
+1. **Fluxo contínuo**: Operador pode cobrar clientes em sequência sem perder a posição
+2. **Visibilidade**: Ícone mostra claramente quem já foi contatado
+3. **Métricas**: Dashboard permite acompanhar produtividade em tempo real
+4. **Performance**: Lookup via Map é O(1), não afeta tempo de carregamento
 
----
-
-## Sobre MICHELE CRISTIANE JOVINO SILVA
-
-Para registrar a cobrança dela, basta:
-1. Acessar a página de Cobrança
-2. Localizar a cliente MICHELE CRISTIANE JOVINO SILVA
-3. Selecionar um template e enviar novamente
-
-Agora que a foreign key está corrigida, o registro será salvo automaticamente.
