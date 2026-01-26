@@ -50,7 +50,7 @@ const App = () => (
             <Route 
               path="/dashboard" 
               element={
-                <ProtectedLayout>
+                <ProtectedLayout allowedRoles={['admin', 'supervisor']}>
                   <Dashboard />
                 </ProtectedLayout>
               } 

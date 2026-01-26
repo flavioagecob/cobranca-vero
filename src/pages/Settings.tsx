@@ -1,7 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings as SettingsIcon, MessageSquare, FileText, ListChecks } from "lucide-react";
+import { Settings as SettingsIcon, MessageSquare, FileText, ListChecks, Users } from "lucide-react";
 import { InstanceList } from "@/components/settings/InstanceList";
+import { UserList } from "@/components/settings/UserList";
 
 export default function Settings() {
   return (
@@ -13,8 +14,12 @@ export default function Settings() {
         </p>
       </div>
 
-      <Tabs defaultValue="instances" className="space-y-4">
+      <Tabs defaultValue="users" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="users" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Usuários
+          </TabsTrigger>
           <TabsTrigger value="instances" className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
             Instâncias
@@ -28,6 +33,10 @@ export default function Settings() {
             Régua de Cobrança
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="users">
+          <UserList />
+        </TabsContent>
 
         <TabsContent value="instances">
           <InstanceList />
