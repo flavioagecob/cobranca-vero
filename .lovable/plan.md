@@ -1,159 +1,96 @@
 
 
-# Plano: Otimização do Sistema de Importação de Planilhas
+# Plano: Adicionar Funcionalidade de Limpeza de Dados
 
-## Diagnóstico: Por que está lento?
+## Objetivo
 
-A importação está extremamente lenta porque o código atual faz **múltiplas queries por linha**:
+Criar uma nova aba nas Configurações chamada "Dados" que permite ao administrador excluir todos os registros do banco de dados para poder subir uma listagem nova (reset completo).
 
-### Fluxo Atual (para cada linha da planilha):
+## Dados Atuais no Banco
 
-**Importação de Vendas (sales)**:
-1. Upsert no customers → 1 query
-2. Insert no sales_base → 1 query
-- **Total: 2 queries por linha**
+| Tabela | Quantidade |
+|--------|------------|
+| customers | 741 |
+| sales_base | 845 |
+| operator_contracts | 1.082 |
+| collection_attempts | 27 |
+| payment_promises | 0 |
+| invoices | 0 |
+| reconciliation_issues | 0 |
+| import_batches | 14 |
 
-**Importação Operadora (operator)** - MUITO PIOR:
-1. SELECT em sales_base (match exato) → 1 query
-2. Se falhar: SELECT com LIKE (sufixo) → 1 query
-3. Se falhar: SELECT para debug → 1 query  
-4. SELECT em operator_contracts (verificar existente) → 1 query
-5. UPDATE ou INSERT → 1 query
-- **Total: 3-5 queries por linha**
+## Funcionalidades
 
-### Exemplo Real:
-- Planilha com 1.000 linhas de operadora
-- Cada linha = ~4 queries em média
-- **Total = ~4.000 queries sequenciais**
-- Latência média por query = ~50ms
-- **Tempo total = ~200 segundos (3+ minutos)**
+### Opções de Limpeza
 
-### Problemas Adicionais:
-- Todas as queries são **síncronas** (espera uma terminar para começar outra)
-- O loop processa batchSize=50, mas dentro do batch ainda é sequencial
-- Muitas queries de diagnóstico/debug em produção
+1. **Limpar Base de Vendas** - Exclui `sales_base` e `customers` vinculados
+2. **Limpar Base Operadora** - Exclui `operator_contracts`
+3. **Limpar Histórico de Cobrança** - Exclui `collection_attempts` e `payment_promises`
+4. **Limpar TUDO** - Remove todos os dados (exceto usuários e instâncias)
 
----
+### Segurança
 
-## Solução: Bulk Operations + Caching
+- Apenas administradores têm acesso
+- Dialog de confirmação com texto "CONFIRMAR" que o usuário precisa digitar
+- Mostra contagem de registros que serão excluídos
+- Operação irreversível com aviso claro
 
-### Estratégia de Otimização
+## Interface
 
-| Aspecto | Atual | Proposto |
-|---------|-------|----------|
-| Queries por linha | 3-5 | ~0.02 (bulk) |
-| Lookups sales_base | 1 por linha | 1 único (cache) |
-| Lookups operator_contracts | 1 por linha | 1 único (cache) |
-| Inserts/Updates | 1 por linha | 1 bulk por batch |
+Nova aba "Dados" nas Configurações com:
+- Cards para cada tipo de limpeza
+- Contador de registros em cada tabela
+- Botões de exclusão com ícone de lixeira
+- Cores de alerta (vermelho) para indicar perigo
 
----
+## Arquivos a Criar/Modificar
 
-## Mudanças Técnicas Detalhadas
+| Arquivo | Ação |
+|---------|------|
+| `src/components/settings/DataManagement.tsx` | Criar - Componente principal |
+| `src/components/settings/ClearDataDialog.tsx` | Criar - Dialog de confirmação |
+| `src/hooks/useDataManagement.ts` | Criar - Hook para operações |
+| `src/pages/Settings.tsx` | Modificar - Adicionar nova aba |
 
-### 1. Cache de Lookup para sales_base
+## Detalhes Técnicos
 
-Antes de iniciar a importação de operadora, carregar **toda a tabela sales_base** em memória (é pequena ~845 registros):
+### Ordem de Exclusão (respeitando foreign keys)
 
-```typescript
-// Carrega uma vez antes do loop
-const { data: allSales } = await supabase
-  .from('sales_base')
-  .select('id, customer_id, os');
+A exclusão precisa seguir ordem específica para evitar erros de constraint:
 
-// Cria mapas para lookup O(1)
-const osByExact = new Map(allSales.map(s => [s.os, s]));
-const osBySuffix = new Map();
-allSales.forEach(s => {
-  const suffix7 = s.os.slice(-7);
-  if (!osBySuffix.has(suffix7)) osBySuffix.set(suffix7, []);
-  osBySuffix.get(suffix7).push(s);
-});
+```text
+1. collection_attempts (referencia customers, invoices)
+2. payment_promises (referencia invoices)
+3. invoices (referencia customers, contracts)
+4. reconciliation_issues (referencia customers, sales_base, contracts)
+5. operator_contracts (referencia customers, sales_base)
+6. sales_base (referencia customers)
+7. import_batches (standalone)
+8. customers (base)
 ```
 
-**Ganho**: Elimina 1-3 queries por linha → 0 queries
-
-### 2. Cache de Contratos Existentes
-
-Carregar todos os pares (id_contrato, numero_fatura) existentes:
+### Hook useDataManagement
 
 ```typescript
-const { data: existingContracts } = await supabase
-  .from('operator_contracts')
-  .select('id, id_contrato, numero_fatura');
-
-const existingMap = new Map(
-  existingContracts.map(c => [`${c.id_contrato}|${c.numero_fatura}`, c.id])
-);
+// Funções do hook:
+- fetchCounts() - Busca contagem de cada tabela
+- clearSalesData() - Limpa vendas + clientes órfãos
+- clearOperatorData() - Limpa contratos operadora
+- clearCollectionHistory() - Limpa tentativas e promessas
+- clearAllData() - Limpa tudo na ordem correta
 ```
 
-**Ganho**: Elimina 1 query de verificação por linha → 0 queries
+### Dialog de Confirmação
 
-### 3. Bulk Insert/Update com PostgreSQL Upsert
-
-Em vez de processar linha a linha, acumular registros e fazer bulk upsert:
-
-```typescript
-// Acumula batch de 200-500 registros
-const toUpsert = [];
-for (const row of batchRows) {
-  const record = mapRowToRecord(row);
-  toUpsert.push(record);
-}
-
-// Um único upsert para todo o batch
-const { error } = await supabase
-  .from('operator_contracts')
-  .upsert(toUpsert, { 
-    onConflict: 'id_contrato,numero_fatura' 
-  });
-```
-
-**Ganho**: 50 inserts → 1 bulk insert
-
-### 4. Remover Logs de Debug em Produção
-
-Logs com `console.log` e `console.warn` em cada linha impactam performance.
-
-### 5. Processamento Paralelo de Batches
-
-Usar Promise.all para processar múltiplos batches simultaneamente:
-
-```typescript
-const PARALLEL_BATCHES = 3;
-for (let i = 0; i < totalBatches; i += PARALLEL_BATCHES) {
-  const batchPromises = [];
-  for (let j = 0; j < PARALLEL_BATCHES && i + j < totalBatches; j++) {
-    batchPromises.push(processBatch(i + j));
-  }
-  await Promise.all(batchPromises);
-}
-```
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/hooks/useImport.ts` | Refatorar para usar caching + bulk operations |
-
----
+- Usuário precisa digitar "CONFIRMAR" para habilitar botão
+- Mostra resumo do que será excluído
+- Loading state durante exclusão
+- Toast de sucesso/erro ao finalizar
 
 ## Resultado Esperado
 
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| 1.000 linhas operadora | ~3-4 min | ~5-10 seg |
-| 5.000 linhas operadora | ~15-20 min | ~30-60 seg |
-| Queries no banco | ~4.000 | ~20-30 |
-
----
-
-## Resumo das Otimizações
-
-1. **Cache de Lookup**: Carregar sales_base e operator_contracts uma vez antes do loop
-2. **Bulk Upsert**: Usar PostgreSQL upsert nativo com conflict key
-3. **Aumentar batch size**: De 50 para 200-500 registros
-4. **Paralelização**: Processar múltiplos batches simultaneamente
-5. **Remover logs**: Eliminar console.log/warn em produção (condicional)
+- Nova aba "Dados" visível apenas para admins
+- Interface clara mostrando quantidade de registros
+- Processo seguro com confirmação obrigatória
+- Permite reset completo para nova importação
 
