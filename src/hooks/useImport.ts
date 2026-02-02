@@ -29,7 +29,6 @@ const formatCpfCnpj = (value: string | null): string | null => {
 const parseDate = (value: string | null): string | null => {
   if (!value) return null;
   
-  // Try different date formats
   const formats = [
     /^(\d{2})\/(\d{2})\/(\d{4})$/, // DD/MM/YYYY
     /^(\d{4})-(\d{2})-(\d{2})$/, // YYYY-MM-DD
@@ -49,7 +48,6 @@ const parseDate = (value: string | null): string | null => {
     }
   }
   
-  // Try native Date parsing
   const date = new Date(value);
   if (!isNaN(date.getTime())) {
     return date.toISOString().split('T')[0];
@@ -58,11 +56,10 @@ const parseDate = (value: string | null): string | null => {
   return null;
 };
 
-// Helper to parse currency - handles Brazilian format and XLSX numbers
+// Helper to parse currency
 const parseCurrency = (value: string | number | null | undefined): number | null => {
   if (value === null || value === undefined) return null;
   
-  // Se já é number (comum em XLSX), retorna direto
   if (typeof value === 'number') {
     return isNaN(value) ? null : value;
   }
@@ -70,13 +67,89 @@ const parseCurrency = (value: string | number | null | undefined): number | null
   let cleaned = value.toString().replace(/[R$\s]/g, '').trim();
   if (!cleaned) return null;
   
-  // Brazilian format: 1.234,56 → remove thousand separator, replace decimal
   if (cleaned.includes(',')) {
     cleaned = cleaned.replace(/\./g, '').replace(',', '.');
   }
   
   const num = parseFloat(cleaned);
   return isNaN(num) ? null : num;
+};
+
+// Types for lookup caches
+interface SalesRecord {
+  id: string;
+  customer_id: string | null;
+  os: string;
+}
+
+interface ExistingContract {
+  id: string;
+  id_contrato: string;
+  numero_fatura: string | null;
+}
+
+// Build sales lookup caches for O(1) lookups
+const buildSalesLookupCache = (salesRecords: SalesRecord[]) => {
+  const byExactOS = new Map<string, SalesRecord>();
+  const bySuffix7 = new Map<string, SalesRecord[]>();
+  const bySuffix8 = new Map<string, SalesRecord[]>();
+
+  for (const record of salesRecords) {
+    const os = record.os;
+    
+    // Exact match map
+    byExactOS.set(os, record);
+    
+    // Suffix-7 map
+    if (os.length >= 7) {
+      const suffix7 = os.slice(-7);
+      if (!bySuffix7.has(suffix7)) {
+        bySuffix7.set(suffix7, []);
+      }
+      bySuffix7.get(suffix7)!.push(record);
+    }
+    
+    // Suffix-8 map
+    if (os.length >= 8) {
+      const suffix8 = os.slice(-8);
+      if (!bySuffix8.has(suffix8)) {
+        bySuffix8.set(suffix8, []);
+      }
+      bySuffix8.get(suffix8)!.push(record);
+    }
+  }
+
+  return { byExactOS, bySuffix7, bySuffix8 };
+};
+
+// Find sales record using cache with fallback strategies
+const findSalesRecordFromCache = (
+  idContrato: string,
+  cache: ReturnType<typeof buildSalesLookupCache>
+): SalesRecord | null => {
+  // Strategy 1: Exact match
+  const exactMatch = cache.byExactOS.get(idContrato);
+  if (exactMatch) return exactMatch;
+
+  // Strategy 2: Suffix-7 match
+  if (idContrato.length >= 7) {
+    const suffix7 = idContrato.slice(-7);
+    const matches7 = cache.bySuffix7.get(suffix7);
+    if (matches7?.length === 1) {
+      return matches7[0];
+    }
+    
+    // Strategy 3: If multiple suffix-7 matches, try suffix-8
+    if (matches7 && matches7.length > 1 && idContrato.length >= 8) {
+      const suffix8 = idContrato.slice(-8);
+      const matches8 = cache.bySuffix8.get(suffix8);
+      if (matches8?.length === 1) {
+        return matches8[0];
+      }
+    }
+  }
+
+  return null;
 };
 
 export const useImport = (): UseImportReturn => {
@@ -119,288 +192,136 @@ export const useImport = (): UseImportReturn => {
         }
       });
 
-      // Process rows in batches of 50
-      const batchSize = 50;
-      const totalBatches = Math.ceil(rows.length / batchSize);
+      // Helper functions for value extraction
+      const getValue = (row: ParsedRow, field: string): string | number | null => {
+        const sourceCol = fieldMap[field];
+        if (!sourceCol) return null;
+        const val = row[sourceCol];
+        if (val === null || val === undefined || val === '') return null;
+        return val as string | number;
+      };
+      
+      const getStringValue = (row: ParsedRow, field: string): string | null => {
+        const val = getValue(row, field);
+        if (val === null) return null;
+        return String(val);
+      };
 
-      for (let i = 0; i < totalBatches; i++) {
-        const batchRows = rows.slice(i * batchSize, (i + 1) * batchSize);
+      if (type === 'sales') {
+        // ===== OPTIMIZED SALES IMPORT =====
+        await importSalesOptimized(rows, fieldMap, batchId, errors, (count) => {
+          successCount = count;
+        }, setProgress);
+      } else {
+        // ===== OPTIMIZED OPERATOR IMPORT =====
+        setProgress(5); // Loading caches...
         
-        for (let j = 0; j < batchRows.length; j++) {
-          const row = batchRows[j];
-          const rowIndex = i * batchSize + j + 2; // +2 for header and 1-indexed
+        // STEP 1: Load all sales_base records into memory (usually < 1000 records)
+        const { data: allSales, error: salesError } = await supabase
+          .from('sales_base')
+          .select('id, customer_id, os');
+
+        if (salesError) throw salesError;
+        
+        const salesCache = buildSalesLookupCache(allSales || []);
+        console.log(`[Import] Loaded ${allSales?.length || 0} sales records into cache`);
+
+        setProgress(10); // Caches loaded
+
+        // STEP 2: Load existing operator_contracts for upsert decisions
+        const { data: existingContracts, error: contractsError } = await supabase
+          .from('operator_contracts')
+          .select('id, id_contrato, numero_fatura');
+
+        if (contractsError) throw contractsError;
+
+        const existingContractsMap = new Map<string, string>();
+        for (const contract of existingContracts || []) {
+          const key = `${contract.id_contrato}|${contract.numero_fatura || ''}`;
+          existingContractsMap.set(key, contract.id);
+        }
+        console.log(`[Import] Loaded ${existingContracts?.length || 0} existing contracts into cache`);
+
+        // STEP 3: Process rows and build upsert batches
+        const BATCH_SIZE = 300;
+        const toInsert: any[] = [];
+        const toUpdate: { id: string; data: any }[] = [];
+        
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const rowIndex = i + 2; // +2 for header and 1-indexed
 
           try {
-            // Extract mapped values - preserva tipo original (number/string)
-            const getValue = (field: string): string | number | null => {
-              const sourceCol = fieldMap[field];
-              if (!sourceCol) return null;
-              const val = row[sourceCol];
-              if (val === null || val === undefined || val === '') return null;
-              return val as string | number;
-            };
-            
-            // Helper para obter como string (para campos texto)
-            const getStringValue = (field: string): string | null => {
-              const val = getValue(field);
-              if (val === null) return null;
-              return String(val);
-            };
-
-            // Para tipo 'sales', precisa criar/atualizar customer
-            // Para tipo 'operator', apenas faz match com sales_base existente
-            let customer: { id: string } | null = null;
-
-            if (type === 'sales') {
-              const cpfCnpj = formatCpfCnpj(getStringValue('cpf_cnpj'));
-              const nome = getStringValue('nome');
-
-              if (!cpfCnpj) {
-                errors.push({ row: rowIndex, field: 'cpf_cnpj', message: 'CPF/CNPJ obrigatório' });
-                continue;
-              }
-
-              if (!nome) {
-                errors.push({ row: rowIndex, field: 'nome', message: 'Nome obrigatório' });
-                continue;
-              }
-
-              // Upsert customer
-              const { data: customerData, error: customerError } = await supabase
-                .from('customers')
-                .upsert({
-                  cpf_cnpj: cpfCnpj,
-                  nome,
-                  email: getStringValue('email'),
-                  telefone: getStringValue('telefone'),
-                  telefone2: getStringValue('telefone2'),
-                  endereco: getStringValue('endereco'),
-                  cidade: getStringValue('cidade'),
-                  uf: getStringValue('uf'),
-                  cep: getStringValue('cep'),
-                }, { onConflict: 'cpf_cnpj' })
-                .select()
-                .single();
-
-              if (customerError) {
-                errors.push({ row: rowIndex, message: customerError.message });
-                continue;
-              }
-              
-              customer = customerData;
+            const idContratoRaw = getStringValue(row, 'id_contrato');
+            if (!idContratoRaw) {
+              errors.push({ row: rowIndex, field: 'id_contrato', message: 'ID Contrato obrigatório' });
+              continue;
             }
 
-            // Insert type-specific record
-            if (type === 'sales') {
-              const os = getStringValue('os');
-              if (!os) {
-                errors.push({ row: rowIndex, field: 'os', message: 'OS obrigatória' });
-                continue;
+            // Normalize id_contrato
+            let idContrato = idContratoRaw.replace(/\D/g, '');
+            if (/^[\d.]+[eE][+-]?\d+$/.test(idContratoRaw.trim())) {
+              const num = parseFloat(idContratoRaw);
+              if (!isNaN(num) && isFinite(num)) {
+                idContrato = Math.round(num).toString();
               }
+            }
 
-              const { error: salesError } = await supabase
-                .from('sales_base')
-                .insert({
-                  customer_id: customer.id,
-                  os: os.replace(/\D/g, ''), // Normaliza para apenas números
-                  produto: getStringValue('produto'),
-                  plano: getStringValue('plano'),
-                  valor_plano: parseCurrency(getValue('valor_plano')),
-                  data_venda: parseDate(getStringValue('data_venda')),
-                  vendedor: getStringValue('vendedor'),
-                  import_batch_id: batchId,
-                  raw_data: row,
-                });
-
-              if (salesError) {
-                errors.push({ row: rowIndex, message: salesError.message });
-                continue;
-              }
-              
-              successCount++;
-            } else {
-              // Tipo 'operator' - faz match pelo id_contrato com sales_base.os
-              const idContratoRaw = getStringValue('id_contrato');
-              if (!idContratoRaw) {
-                errors.push({ row: rowIndex, field: 'id_contrato', message: 'ID Contrato obrigatório' });
-                continue;
-              }
-
-              // Normaliza para apenas números (match com OS)
-              let idContrato = idContratoRaw.replace(/\D/g, '');
-              
-              // Se parece notação científica, converte
-              if (/^[\d.]+[eE][+-]?\d+$/.test(idContratoRaw.trim())) {
-                const num = parseFloat(idContratoRaw);
-                if (!isNaN(num) && isFinite(num)) {
-                  idContrato = Math.round(num).toString();
-                }
-              }
-
-              // Log das primeiras linhas para debug
-              if (rowIndex <= 7) {
-                console.log(`[Operadora] Linha ${rowIndex}: CONTRATO raw="${idContratoRaw}" → normalizado="${idContrato}"`);
-              }
-
-              // Estratégia 1: Match exato
-              let salesRecord: { id: string; customer_id: string; os: string } | null = null;
-              
-              const { data: exactMatch, error: exactError } = await supabase
-                .from('sales_base')
-                .select('id, customer_id, os')
-                .eq('os', idContrato)
-                .maybeSingle();
-
-              if (exactError) {
-                errors.push({ row: rowIndex, message: exactError.message });
-                continue;
-              }
-
-              if (exactMatch) {
-                salesRecord = exactMatch;
-              } else {
-                // Estratégia 2: Match por sufixo (últimos 7 dígitos)
-                const suffix = idContrato.slice(-7);
-                const { data: suffixMatches, error: suffixError } = await supabase
-                  .from('sales_base')
-                  .select('id, customer_id, os')
-                  .like('os', `%${suffix}`);
-
-                if (suffixError) {
-                  errors.push({ row: rowIndex, message: suffixError.message });
-                  continue;
-                }
-
-                if (suffixMatches && suffixMatches.length === 1) {
-                  salesRecord = suffixMatches[0];
-                  console.log(`[Operadora] Match por sufixo: CONTRATO ${idContrato} → OS ${salesRecord.os}`);
-                } else if (suffixMatches && suffixMatches.length > 1) {
-                  // Estratégia 3: Match por sufixo maior (últimos 8 dígitos)
-                  const longerSuffix = idContrato.slice(-8);
-                  const filtered = suffixMatches.filter(s => s.os.endsWith(longerSuffix));
-                  if (filtered.length === 1) {
-                    salesRecord = filtered[0];
-                    console.log(`[Operadora] Match por sufixo longo: CONTRATO ${idContrato} → OS ${salesRecord.os}`);
-                  }
-                }
-              }
-
-              if (!salesRecord) {
-                // Log diagnóstico para primeiros erros
-                if (errors.length < 10) {
-                  // Busca exemplos de OS existentes para diagnóstico
-                  const { data: sampleOS } = await supabase
-                    .from('sales_base')
-                    .select('os')
-                    .not('os', 'is', null)
-                    .limit(3);
-                  
-                  console.warn(`[Operadora] Linha ${rowIndex}: Não encontrou match para CONTRATO="${idContrato}" (raw="${idContratoRaw}"). Exemplos de OS na base:`, sampleOS?.map(s => s.os));
-                }
-                
-                errors.push({ 
-                  row: rowIndex, 
-                  field: 'id_contrato', 
-                  message: `Contrato ${idContrato} não encontrado na base de vendas` 
-                });
-                continue;
-              }
-
-              // Usa o customer_id encontrado na sales_base
-              const numeroFaturaRaw = getValue('numero_fatura');
-              
-              // Normaliza numero_fatura: remove espaços e extrai dígitos se necessário
-              let numeroFatura = (numeroFaturaRaw || '').toString().trim();
-              
-              // Se for só dígitos, usa direto; senão tenta extrair
-              if (!/^\d+$/.test(numeroFatura)) {
-                const digitsOnly = numeroFatura.replace(/\D/g, '');
-                numeroFatura = digitsOnly || '';
-              }
-              
-              // VALIDAÇÃO OBRIGATÓRIA: numero_fatura não pode ser vazio
-              if (!numeroFatura) {
-                errors.push({ 
-                  row: rowIndex, 
-                  field: 'numero_fatura', 
-                  message: 'Número da fatura obrigatório - verifique o mapeamento da coluna FATURA' 
-                });
-                
-                // Log detalhado para diagnóstico
-                if (errors.filter(e => e.field === 'numero_fatura').length <= 5) {
-                  console.warn(`[Operadora] Linha ${rowIndex}: numero_fatura vazio!`, {
-                    numero_fatura_raw: numeroFaturaRaw,
-                    mapeamento: fieldMap['numero_fatura'] || '(não mapeado)',
-                    headers_disponiveis: Object.keys(row).slice(0, 10),
-                  });
-                }
-                continue;
-              }
-              
-              // Dados da fatura atual
-              const valorFatura = parseCurrency(getValue('valor_fatura'));
-              const dataVencimento = parseDate(getStringValue('data_vencimento'));
-              
-              // Log detalhado para TODAS as faturas do mesmo contrato (debug)
-              console.log(`[FATURA] Linha ${rowIndex}:`, {
-                contrato: idContrato,
-                fatura_numero: numeroFatura,
-                valor: valorFatura,
-                vencimento: dataVencimento,
-                mapeamento: fieldMap['numero_fatura'] || '(não mapeado)',
+            // Find sales record using cache (O(1) lookup)
+            const salesRecord = findSalesRecordFromCache(idContrato, salesCache);
+            
+            if (!salesRecord) {
+              errors.push({ 
+                row: rowIndex, 
+                field: 'id_contrato', 
+                message: `Contrato ${idContrato} não encontrado na base de vendas` 
               });
-              
-              // Verificar se já existe um registro com esse contrato+fatura
-              const { data: existingContract } = await supabase
-                .from('operator_contracts')
-                .select('id, valor_fatura, data_vencimento')
-                .eq('id_contrato', idContrato)
-                .eq('numero_fatura', numeroFatura)
-                .maybeSingle();
+              continue;
+            }
 
-              const contractData = {
-                customer_id: salesRecord.customer_id,
-                sales_base_id: salesRecord.id,
-                id_contrato: idContrato,
-                numero_fatura: numeroFatura,
-                status_contrato: getStringValue('status_contrato'),
-                data_cadastro: parseDate(getStringValue('data_cadastro')),
-                mes_safra_cadastro: getStringValue('mes_safra_cadastro'),
-                mes_safra_vencimento: getStringValue('mes_safra_vencimento'),
-                data_vencimento: dataVencimento,
-                data_pagamento: parseDate(getStringValue('data_pagamento')),
-                valor_fatura: valorFatura,
-                import_batch_id: batchId,
-                raw_data: row,
-              };
+            // Get and validate numero_fatura
+            const numeroFaturaRaw = getValue(row, 'numero_fatura');
+            let numeroFatura = (numeroFaturaRaw || '').toString().trim();
+            if (!/^\d+$/.test(numeroFatura)) {
+              numeroFatura = numeroFatura.replace(/\D/g, '') || '';
+            }
+            
+            if (!numeroFatura) {
+              errors.push({ 
+                row: rowIndex, 
+                field: 'numero_fatura', 
+                message: 'Número da fatura obrigatório' 
+              });
+              continue;
+            }
 
-              let operatorError;
+            // Build contract data
+            const contractData = {
+              customer_id: salesRecord.customer_id,
+              sales_base_id: salesRecord.id,
+              id_contrato: idContrato,
+              numero_fatura: numeroFatura,
+              status_contrato: getStringValue(row, 'status_contrato'),
+              data_cadastro: parseDate(getStringValue(row, 'data_cadastro')),
+              mes_safra_cadastro: getStringValue(row, 'mes_safra_cadastro'),
+              mes_safra_vencimento: getStringValue(row, 'mes_safra_vencimento'),
+              data_vencimento: parseDate(getStringValue(row, 'data_vencimento')),
+              data_pagamento: parseDate(getStringValue(row, 'data_pagamento')),
+              valor_fatura: parseCurrency(getValue(row, 'valor_fatura')),
+              import_batch_id: batchId,
+              raw_data: row,
+            };
 
-              if (existingContract) {
-                // UPDATE - registro já existe com mesmo contrato+fatura
-                const { error } = await supabase
-                  .from('operator_contracts')
-                  .update(contractData)
-                  .eq('id', existingContract.id);
-                operatorError = error;
-                
-                console.log(`[FATURA] Linha ${rowIndex}: UPDATE (contrato=${idContrato}, fatura=${numeroFatura}, id=${existingContract.id})`);
-              } else {
-                // INSERT - combinação contrato+fatura não existe ainda
-                const { error } = await supabase
-                  .from('operator_contracts')
-                  .insert(contractData);
-                operatorError = error;
-                
-                console.log(`[FATURA] Linha ${rowIndex}: INSERT (contrato=${idContrato}, fatura=${numeroFatura})`);
-              }
+            // Check if exists using cache
+            const existingKey = `${idContrato}|${numeroFatura}`;
+            const existingId = existingContractsMap.get(existingKey);
 
-              if (operatorError) {
-                errors.push({ row: rowIndex, message: operatorError.message });
-                continue;
-              }
-              
-              successCount++;
+            if (existingId) {
+              toUpdate.push({ id: existingId, data: contractData });
+            } else {
+              toInsert.push(contractData);
+              // Add to cache to handle duplicates within same import
+              existingContractsMap.set(existingKey, 'pending');
             }
           } catch (err) {
             errors.push({
@@ -410,7 +331,68 @@ export const useImport = (): UseImportReturn => {
           }
         }
 
-        setProgress(Math.round(((i + 1) / totalBatches) * 100));
+        setProgress(30); // Records prepared
+
+        // STEP 4: Execute bulk insert
+        if (toInsert.length > 0) {
+          const insertBatches = Math.ceil(toInsert.length / BATCH_SIZE);
+          for (let i = 0; i < insertBatches; i++) {
+            const batchData = toInsert.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
+            
+            const { error: insertError } = await supabase
+              .from('operator_contracts')
+              .insert(batchData);
+
+            if (insertError) {
+              console.error(`[Import] Bulk insert error batch ${i + 1}:`, insertError.message);
+              // Count as errors but continue
+              errors.push({ row: 0, message: `Erro no batch ${i + 1}: ${insertError.message}` });
+            } else {
+              successCount += batchData.length;
+            }
+
+            const insertProgress = 30 + Math.round((i + 1) / insertBatches * 30);
+            setProgress(insertProgress);
+          }
+        }
+
+        console.log(`[Import] Inserted ${successCount} new contracts`);
+
+        // STEP 5: Execute bulk updates (in smaller batches to avoid timeout)
+        if (toUpdate.length > 0) {
+          const UPDATE_BATCH_SIZE = 100;
+          const updateBatches = Math.ceil(toUpdate.length / UPDATE_BATCH_SIZE);
+          
+          for (let i = 0; i < updateBatches; i++) {
+            const batchUpdates = toUpdate.slice(i * UPDATE_BATCH_SIZE, (i + 1) * UPDATE_BATCH_SIZE);
+            
+            // Use Promise.all for parallel updates within batch
+            const updatePromises = batchUpdates.map(({ id, data }) =>
+              supabase
+                .from('operator_contracts')
+                .update(data)
+                .eq('id', id)
+            );
+
+            const results = await Promise.all(updatePromises);
+            
+            let batchSuccessCount = 0;
+            for (const result of results) {
+              if (result.error) {
+                errors.push({ row: 0, message: `Update error: ${result.error.message}` });
+              } else {
+                batchSuccessCount++;
+              }
+            }
+            successCount += batchSuccessCount;
+
+            const updateProgress = 60 + Math.round((i + 1) / updateBatches * 35);
+            setProgress(updateProgress);
+          }
+        }
+
+        console.log(`[Import] Updated ${toUpdate.length} existing contracts`);
+        setProgress(95);
       }
 
       // Update batch with results
@@ -422,15 +404,18 @@ export const useImport = (): UseImportReturn => {
         })
         .eq('id', batchId);
 
+      setProgress(100);
+
       return {
         success: errors.length === 0,
         totalProcessed: rows.length,
         successCount,
         errorCount: errors.length,
-        errors: errors.slice(0, 50), // Limit errors shown
+        errors: errors.slice(0, 50),
         batchId,
       };
     } catch (err) {
+      console.error('[Import] Fatal error:', err);
       return {
         success: false,
         totalProcessed: 0,
@@ -454,3 +439,162 @@ export const useImport = (): UseImportReturn => {
     executeImport,
   };
 };
+
+// Optimized sales import with bulk operations
+async function importSalesOptimized(
+  rows: ParsedRow[],
+  fieldMap: Record<string, string>,
+  batchId: string,
+  errors: ImportError[],
+  setSuccessCount: (count: number) => void,
+  setProgress: (progress: number) => void
+) {
+  const getValue = (row: ParsedRow, field: string): string | number | null => {
+    const sourceCol = fieldMap[field];
+    if (!sourceCol) return null;
+    const val = row[sourceCol];
+    if (val === null || val === undefined || val === '') return null;
+    return val as string | number;
+  };
+  
+  const getStringValue = (row: ParsedRow, field: string): string | null => {
+    const val = getValue(row, field);
+    if (val === null) return null;
+    return String(val);
+  };
+
+  // STEP 1: Extract and validate all customer data
+  const customersToUpsert: Map<string, any> = new Map();
+  const validRows: { row: ParsedRow; rowIndex: number; cpfCnpj: string }[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowIndex = i + 2;
+
+    const cpfCnpj = formatCpfCnpj(getStringValue(row, 'cpf_cnpj'));
+    const nome = getStringValue(row, 'nome');
+    const os = getStringValue(row, 'os');
+
+    if (!cpfCnpj) {
+      errors.push({ row: rowIndex, field: 'cpf_cnpj', message: 'CPF/CNPJ obrigatório' });
+      continue;
+    }
+
+    if (!nome) {
+      errors.push({ row: rowIndex, field: 'nome', message: 'Nome obrigatório' });
+      continue;
+    }
+
+    if (!os) {
+      errors.push({ row: rowIndex, field: 'os', message: 'OS obrigatória' });
+      continue;
+    }
+
+    // Store customer data (last occurrence wins for same CPF)
+    customersToUpsert.set(cpfCnpj, {
+      cpf_cnpj: cpfCnpj,
+      nome,
+      email: getStringValue(row, 'email'),
+      telefone: getStringValue(row, 'telefone'),
+      telefone2: getStringValue(row, 'telefone2'),
+      endereco: getStringValue(row, 'endereco'),
+      cidade: getStringValue(row, 'cidade'),
+      uf: getStringValue(row, 'uf'),
+      cep: getStringValue(row, 'cep'),
+    });
+
+    validRows.push({ row, rowIndex, cpfCnpj });
+  }
+
+  setProgress(20);
+
+  // STEP 2: Bulk upsert customers
+  const customersArray = Array.from(customersToUpsert.values());
+  const CUSTOMER_BATCH_SIZE = 200;
+  const customerBatches = Math.ceil(customersArray.length / CUSTOMER_BATCH_SIZE);
+
+  for (let i = 0; i < customerBatches; i++) {
+    const batchData = customersArray.slice(i * CUSTOMER_BATCH_SIZE, (i + 1) * CUSTOMER_BATCH_SIZE);
+    
+    const { error } = await supabase
+      .from('customers')
+      .upsert(batchData, { onConflict: 'cpf_cnpj' });
+
+    if (error) {
+      console.error(`[Import] Customer upsert error batch ${i + 1}:`, error.message);
+    }
+  }
+
+  setProgress(40);
+
+  // STEP 3: Fetch all customer IDs
+  const cpfList = Array.from(customersToUpsert.keys());
+  const { data: customers, error: fetchError } = await supabase
+    .from('customers')
+    .select('id, cpf_cnpj')
+    .in('cpf_cnpj', cpfList);
+
+  if (fetchError) {
+    throw fetchError;
+  }
+
+  const customerIdMap = new Map<string, string>();
+  for (const c of customers || []) {
+    customerIdMap.set(c.cpf_cnpj, c.id);
+  }
+
+  setProgress(50);
+
+  // STEP 4: Build sales records
+  const salesToInsert: any[] = [];
+  
+  for (const { row, rowIndex, cpfCnpj } of validRows) {
+    const customerId = customerIdMap.get(cpfCnpj);
+    if (!customerId) {
+      errors.push({ row: rowIndex, message: 'Cliente não encontrado após upsert' });
+      continue;
+    }
+
+    const os = getStringValue(row, 'os');
+
+    salesToInsert.push({
+      customer_id: customerId,
+      os: os!.replace(/\D/g, ''),
+      produto: getStringValue(row, 'produto'),
+      plano: getStringValue(row, 'plano'),
+      valor_plano: parseCurrency(getValue(row, 'valor_plano')),
+      data_venda: parseDate(getStringValue(row, 'data_venda')),
+      vendedor: getStringValue(row, 'vendedor'),
+      import_batch_id: batchId,
+      raw_data: row,
+    });
+  }
+
+  setProgress(60);
+
+  // STEP 5: Bulk insert sales records
+  const SALES_BATCH_SIZE = 200;
+  const salesBatches = Math.ceil(salesToInsert.length / SALES_BATCH_SIZE);
+  let successCount = 0;
+
+  for (let i = 0; i < salesBatches; i++) {
+    const batchData = salesToInsert.slice(i * SALES_BATCH_SIZE, (i + 1) * SALES_BATCH_SIZE);
+    
+    const { error } = await supabase
+      .from('sales_base')
+      .insert(batchData);
+
+    if (error) {
+      console.error(`[Import] Sales insert error batch ${i + 1}:`, error.message);
+      errors.push({ row: 0, message: `Erro no batch ${i + 1}: ${error.message}` });
+    } else {
+      successCount += batchData.length;
+    }
+
+    const progress = 60 + Math.round((i + 1) / salesBatches * 35);
+    setProgress(progress);
+  }
+
+  setSuccessCount(successCount);
+  setProgress(95);
+}
