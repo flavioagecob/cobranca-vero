@@ -1,10 +1,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings as SettingsIcon, MessageSquare, FileText, ListChecks, Users } from "lucide-react";
+import { MessageSquare, FileText, ListChecks, Users, Database } from "lucide-react";
 import { InstanceList } from "@/components/settings/InstanceList";
 import { UserList } from "@/components/settings/UserList";
+import { DataManagement } from "@/components/settings/DataManagement";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Settings() {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
+
   return (
     <div className="space-y-6">
       <div>
@@ -32,6 +37,12 @@ export default function Settings() {
             <ListChecks className="h-4 w-4" />
             Régua de Cobrança
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="data" className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              Dados
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="users">
@@ -75,6 +86,12 @@ export default function Settings() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="data">
+            <DataManagement />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
