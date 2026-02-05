@@ -51,6 +51,9 @@ export const SALES_FIELDS: ColumnMapping[] = [
   { sourceColumn: '', targetField: 'valor_plano', required: false },
   { sourceColumn: '', targetField: 'data_venda', required: false },
   { sourceColumn: '', targetField: 'vendedor', required: false },
+  { sourceColumn: '', targetField: 'mes_safra', required: false },
+  { sourceColumn: '', targetField: 'data_vencimento', required: false },
+  { sourceColumn: '', targetField: 'valor', required: false },
 ];
 
 export const OPERATOR_FIELDS: ColumnMapping[] = [
@@ -82,6 +85,9 @@ export const FIELD_LABELS: Record<string, string> = {
   valor_plano: 'Valor do Plano',
   data_venda: 'Data da Venda',
   vendedor: 'Vendedor',
+  mes_safra: 'Mês Safra',
+  data_vencimento: 'Data de Vencimento',
+  valor: 'Valor',
   // Campos Base Operadora
   id_contrato: 'ID Contrato (CONTRATO)',
   numero_fatura: 'Número da Fatura',
@@ -89,7 +95,6 @@ export const FIELD_LABELS: Record<string, string> = {
   data_cadastro: 'Data de Cadastro',
   mes_safra_cadastro: 'Mês Safra Cadastro',
   mes_safra_vencimento: 'Mês Safra Vencimento',
-  data_vencimento: 'Data de Vencimento',
   data_pagamento: 'Data de Pagamento',
   valor_fatura: 'Valor da Fatura',
 };

@@ -16,6 +16,7 @@ import CustomerDetail from "./pages/CustomerDetail";
 import Invoices from "./pages/Invoices";
 import Collection from "./pages/Collection";
 import CollectionKanban from "./pages/CollectionKanban";
+import PreventiveCollection from "./pages/PreventiveCollection";
 import Reconciliation from "./pages/Reconciliation";
 import Import from "./pages/Import";
 import Reports from "./pages/Reports";
@@ -98,6 +99,15 @@ const App = () => (
               element={
                 <ProtectedLayout>
                   <CollectionKanban />
+                </ProtectedLayout>
+              } 
+            />
+
+            <Route 
+              path="/preventive-collection" 
+              element={
+                <ProtectedLayout>
+                  <PreventiveCollection />
                 </ProtectedLayout>
               } 
             />

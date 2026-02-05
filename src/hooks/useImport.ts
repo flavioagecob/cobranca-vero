@@ -565,6 +565,9 @@ async function importSalesOptimized(
       valor_plano: parseCurrency(getValue(row, 'valor_plano')),
       data_venda: parseDate(getStringValue(row, 'data_venda')),
       vendedor: getStringValue(row, 'vendedor'),
+      mes_safra: getStringValue(row, 'mes_safra'),
+      data_vencimento: parseDate(getStringValue(row, 'data_vencimento')),
+      valor: parseCurrency(getValue(row, 'valor')),
       import_batch_id: batchId,
       raw_data: row,
     });
