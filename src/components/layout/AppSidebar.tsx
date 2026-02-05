@@ -3,6 +3,7 @@ import {
   Users, 
   FileText, 
   Phone, 
+  CalendarClock,
   GitCompare, 
   Upload, 
   BarChart3,
@@ -64,6 +65,12 @@ const mainNavItems: NavItem[] = [
     title: "Cobrança",
     url: "/collection",
     icon: Phone,
+    roles: ['admin', 'supervisor', 'cobrador'],
+  },
+  {
+    title: "Cobrança Preventiva",
+    url: "/preventive-collection",
+    icon: CalendarClock,
     roles: ['admin', 'supervisor', 'cobrador'],
   },
   {

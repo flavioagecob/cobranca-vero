@@ -472,39 +472,51 @@ export type Database = {
         Row: {
           created_at: string | null
           customer_id: string | null
+          data_vencimento: string | null
           data_venda: string | null
           id: string
           import_batch_id: string | null
+          mes_safra: string | null
           os: string
           plano: string | null
           produto: string | null
           raw_data: Json | null
+          status_cobranca: string | null
+          valor: number | null
           valor_plano: number | null
           vendedor: string | null
         }
         Insert: {
           created_at?: string | null
           customer_id?: string | null
+          data_vencimento?: string | null
           data_venda?: string | null
           id?: string
           import_batch_id?: string | null
+          mes_safra?: string | null
           os: string
           plano?: string | null
           produto?: string | null
           raw_data?: Json | null
+          status_cobranca?: string | null
+          valor?: number | null
           valor_plano?: number | null
           vendedor?: string | null
         }
         Update: {
           created_at?: string | null
           customer_id?: string | null
+          data_vencimento?: string | null
           data_venda?: string | null
           id?: string
           import_batch_id?: string | null
+          mes_safra?: string | null
           os?: string
           plano?: string | null
           produto?: string | null
           raw_data?: Json | null
+          status_cobranca?: string | null
+          valor?: number | null
           valor_plano?: number | null
           vendedor?: string | null
         }
