@@ -1,96 +1,183 @@
 
 
-# Plano: Adicionar Funcionalidade de Limpeza de Dados
+# Plano: Cobrança Antecipada (Preventiva) + Novo Campo Safra
 
-## Objetivo
+## Resumo do Que Será Feito
 
-Criar uma nova aba nas Configurações chamada "Dados" que permite ao administrador excluir todos os registros do banco de dados para poder subir uma listagem nova (reset completo).
+Vamos implementar duas mudanças principais:
 
-## Dados Atuais no Banco
+1. **Novo campo na importação de vendas**: Adicionar "Mês Safra" e "Data de Vencimento" na planilha de vendas
+2. **Nova página de Cobrança Preventiva**: Uma página separada para trabalhar clientes que ainda não venceram
 
-| Tabela | Quantidade |
-|--------|------------|
-| customers | 741 |
-| sales_base | 845 |
-| operator_contracts | 1.082 |
-| collection_attempts | 27 |
-| payment_promises | 0 |
-| invoices | 0 |
-| reconciliation_issues | 0 |
-| import_batches | 14 |
+---
 
-## Funcionalidades
+## Entendendo a Mudança
 
-### Opções de Limpeza
+### Situação Atual
 
-1. **Limpar Base de Vendas** - Exclui `sales_base` e `customers` vinculados
-2. **Limpar Base Operadora** - Exclui `operator_contracts`
-3. **Limpar Histórico de Cobrança** - Exclui `collection_attempts` e `payment_promises`
-4. **Limpar TUDO** - Remove todos os dados (exceto usuários e instâncias)
+| Base de Vendas | Base Operadora |
+|----------------|----------------|
+| Dados do cliente + OS | Dados de contrato vencido |
+| Sem vencimento | Com data de vencimento |
+| Sem safra | Com mês safra |
 
-### Segurança
+**Fluxo atual**: Vendas → Operadora (match) → Cobrança (só vencidos)
 
-- Apenas administradores têm acesso
-- Dialog de confirmação com texto "CONFIRMAR" que o usuário precisa digitar
-- Mostra contagem de registros que serão excluídos
-- Operação irreversível com aviso claro
+### Situação Nova
 
-## Interface
+| Base de Vendas (ampliada) | Base Operadora |
+|---------------------------|----------------|
+| Dados do cliente + OS | Dados de contrato vencido |
+| **Com data de vencimento** | Com data de vencimento |
+| **Com mês safra** | Com mês safra |
+| **Com valor** | Com valor |
 
-Nova aba "Dados" nas Configurações com:
-- Cards para cada tipo de limpeza
-- Contador de registros em cada tabela
-- Botões de exclusão com ícone de lixeira
-- Cores de alerta (vermelho) para indicar perigo
+**Novo fluxo**: 
+- Vendas com vencimento futuro → **Cobrança Preventiva** (antes de vencer)
+- Operadora com vencimento passado → **Cobrança** (já vencido)
 
-## Arquivos a Criar/Modificar
+---
 
-| Arquivo | Ação |
-|---------|------|
-| `src/components/settings/DataManagement.tsx` | Criar - Componente principal |
-| `src/components/settings/ClearDataDialog.tsx` | Criar - Dialog de confirmação |
-| `src/hooks/useDataManagement.ts` | Criar - Hook para operações |
-| `src/pages/Settings.tsx` | Modificar - Adicionar nova aba |
+## 1. Mudanças no Banco de Dados
 
-## Detalhes Técnicos
+### Novos campos na tabela `sales_base`:
 
-### Ordem de Exclusão (respeitando foreign keys)
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `mes_safra` | text | Mês da safra (ex: "2025-01") |
+| `data_vencimento` | date | Data do vencimento previsto |
+| `valor` | numeric | Valor a ser cobrado |
+| `status_cobranca` | text | 'pendente', 'cobrado', 'pago' |
 
-A exclusão precisa seguir ordem específica para evitar erros de constraint:
+---
+
+## 2. Mudanças na Importação
+
+### Novos campos mapeáveis na Base de Vendas:
+
+| Campo | Rótulo | Obrigatório |
+|-------|--------|-------------|
+| mes_safra | Mês Safra | Não |
+| data_vencimento | Data de Vencimento | Não |
+| valor | Valor | Não |
+
+O sistema de auto-match também será atualizado para reconhecer colunas como "SAFRA", "VENCIMENTO", "VALOR", etc.
+
+---
+
+## 3. Nova Página: Cobrança Preventiva
+
+### Acesso
+
+- Nova entrada no menu lateral: **"Cobrança Preventiva"** (ícone de calendário)
+- Rota: `/preventive-collection`
+- Acessível por: admin, supervisor, cobrador
+
+### Funcionalidades
+
+A página terá a mesma estrutura da Cobrança atual, mas:
+
+| Cobrança (atual) | Cobrança Preventiva (nova) |
+|------------------|---------------------------|
+| Busca em `operator_contracts` | Busca em `sales_base` |
+| `data_vencimento < hoje` | `data_vencimento >= hoje` e `data_vencimento <= hoje + 15 dias` |
+| Faturas já vencidas | Faturas prestes a vencer |
+| Cor vermelha (urgência) | Cor amarela/laranja (atenção) |
+
+### Cards de Estatísticas
+
+- **A Vencer em 7 dias**: Quantidade de leads
+- **A Vencer em 15 dias**: Quantidade de leads
+- **Valor Total a Vencer**: Soma dos valores
+- **Cobrados Hoje**: Leads contatados preventivamente hoje
+
+### Filtros
+
+- Safra (usa `sales_base.mes_safra`)
+- Dias até vencer: "Hoje", "1-7 dias", "8-15 dias"
+
+---
+
+## 4. Arquivos a Criar/Modificar
+
+### Banco de Dados
+
+| Alteração | Descrição |
+|-----------|-----------|
+| Migration SQL | Adicionar campos à tabela `sales_base` |
+
+### Importação
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/types/import.ts` | Adicionar novos campos em `SALES_FIELDS` |
+| `src/hooks/useImport.ts` | Incluir novos campos no processamento |
+
+### Nova Página
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/pages/PreventiveCollection.tsx` | Nova página de cobrança preventiva |
+| `src/hooks/usePreventiveCollection.ts` | Hook para buscar dados de vendas a vencer |
+| `src/components/preventive/PreventiveQueue.tsx` | Lista de clientes |
+| `src/components/preventive/PreventiveStatsCards.tsx` | Cards de estatísticas |
+
+### Navegação
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/layout/AppSidebar.tsx` | Adicionar menu "Cobrança Preventiva" |
+| `src/App.tsx` | Adicionar rota `/preventive-collection` |
+
+---
+
+## 5. Interface Visual
+
+### Menu Lateral (Sidebar)
 
 ```text
-1. collection_attempts (referencia customers, invoices)
-2. payment_promises (referencia invoices)
-3. invoices (referencia customers, contracts)
-4. reconciliation_issues (referencia customers, sales_base, contracts)
-5. operator_contracts (referencia customers, sales_base)
-6. sales_base (referencia customers)
-7. import_batches (standalone)
-8. customers (base)
+Principal
+├── Dashboard
+├── Clientes
+├── Faturas
+├── Cobrança           ← vencidos (existente)
+├── Cobrança Preventiva ← a vencer (NOVO)
+└── Conciliação
 ```
 
-### Hook useDataManagement
+### Diferenciação Visual
 
-```typescript
-// Funções do hook:
-- fetchCounts() - Busca contagem de cada tabela
-- clearSalesData() - Limpa vendas + clientes órfãos
-- clearOperatorData() - Limpa contratos operadora
-- clearCollectionHistory() - Limpa tentativas e promessas
-- clearAllData() - Limpa tudo na ordem correta
-```
+| Elemento | Cobrança | Cobrança Preventiva |
+|----------|----------|---------------------|
+| Ícone | Phone (telefone) | CalendarClock (calendário) |
+| Cor principal | Vermelho | Amarelo/Laranja |
+| Título | "Fila de clientes com faturas vencidas" | "Fila de clientes com faturas a vencer" |
+| Badge dias | "X dias de atraso" | "Vence em X dias" |
 
-### Dialog de Confirmação
+---
 
-- Usuário precisa digitar "CONFIRMAR" para habilitar botão
-- Mostra resumo do que será excluído
-- Loading state durante exclusão
-- Toast de sucesso/erro ao finalizar
+## 6. Fluxo de Trabalho do Operador
 
-## Resultado Esperado
+### Cobrança Preventiva (manhã)
+1. Filtrar por "Vence em 1-7 dias"
+2. Ligar/enviar WhatsApp lembrando do vencimento
+3. Registrar tentativa com status "lembrete enviado"
 
-- Nova aba "Dados" visível apenas para admins
-- Interface clara mostrando quantidade de registros
-- Processo seguro com confirmação obrigatória
-- Permite reset completo para nova importação
+### Cobrança Vencida (tarde)
+1. Trabalhar clientes que já venceram
+2. Cobrar valores em atraso
+3. Negociar promessas de pagamento
+
+---
+
+## Resumo das Mudanças
+
+| Etapa | Arquivos |
+|-------|----------|
+| 1. Migration banco | 1 arquivo SQL |
+| 2. Tipos importação | 1 arquivo |
+| 3. Hook importação | 1 arquivo |
+| 4. Nova página + componentes | 4 arquivos |
+| 5. Navegação (sidebar + rotas) | 2 arquivos |
+| **Total** | **~9 arquivos** |
 
