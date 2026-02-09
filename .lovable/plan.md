@@ -1,42 +1,35 @@
 
+# Exportacao de Faturas com Filtros Aplicados
 
-# Popup "Ver Ficha" em vez de navegar para outra pagina
+## O que sera feito
 
-## Problema
+O botao "Exportar" na pagina de Faturas vai gerar um arquivo Excel (.xlsx) contendo todas as faturas que correspondem aos filtros atualmente aplicados (status, safra, parcela, dias de atraso, busca). O arquivo incluira todas as colunas visiveis na tabela.
 
-Ao clicar em "Ver Ficha" nas paginas de Cobranca e Cobranca Preventiva, o usuario e redirecionado para `/customers/:id`, perdendo o contexto de trabalho. Para voltar, precisa usar o botao voltar do navegador ou navegar manualmente.
+## Alteracoes
 
-## Solucao
+### 1. `src/hooks/useInvoices.ts`
+- Expor uma nova propriedade `allFilteredInvoices` que contem todos os registros filtrados (sem paginacao), para que a exportacao inclua todos os dados e nao apenas a pagina atual.
 
-Criar um componente `CustomerDetailDialog` que exibe os dados completos do cliente em um Dialog (popup modal), reutilizando o hook `useCustomerDetail` ja existente. O botao "Ver Ficha" abrira esse dialog em vez de navegar para outra pagina.
-
-## Arquivos a criar
-
-**`src/components/shared/CustomerDetailDialog.tsx`** (novo)
-- Dialog/modal com largura grande (`max-w-4xl`) para acomodar os dados
-- Recebe `customerId` e `open`/`onOpenChange` como props
-- Usa o hook `useCustomerDetail(customerId)` para buscar dados
-- Exibe as mesmas informacoes da pagina CustomerDetail:
-  - Informacoes pessoais (nome, CPF, telefone, email, endereco)
-  - Abas de Vendas e Contratos (tabelas)
-  - Resumo de Faturas
-  - Historico de cobranca (HistoryTimeline)
-- Skeleton de loading enquanto carrega
-- Link externo "Abrir pagina completa" para quem quiser ir a pagina dedicada
-
-## Arquivos a modificar
-
-**`src/components/preventive/PreventiveCustomerCard.tsx`**
-- Substituir o `<Link to={...}>` por um botao que abre o `CustomerDetailDialog`
-- Adicionar estado `dialogOpen` para controlar o dialog
-
-**`src/components/collection/CustomerInfoCard.tsx`**
-- Mesma alteracao: substituir o `<Link>` por botao que abre o `CustomerDetailDialog`
+### 2. `src/pages/Invoices.tsx`
+- Implementar a funcao `handleExport` no botao "Exportar" ja existente.
+- Usar a biblioteca `xlsx` (ja instalada no projeto) para gerar o arquivo.
+- Colunas do arquivo exportado:
+  - Numero Fatura
+  - Cliente (nome)
+  - CPF/CNPJ
+  - Telefone
+  - Safra
+  - Valor
+  - Data Vencimento
+  - Data Pagamento
+  - Status
+  - Dias Atraso
+- O nome do arquivo incluira a data atual: `faturas_2026-02-09.xlsx`
+- Exibir toast de sucesso/erro apos a exportacao
+- Desabilitar o botao durante loading ou quando nao ha dados
 
 ## Detalhes tecnicos
 
-- O dialog usara `@radix-ui/react-dialog` ja disponivel no projeto
-- O hook `useCustomerDetail` ja faz toda a busca necessaria (cliente, vendas, contratos, tentativas, promessas)
-- O conteudo do dialog sera um ScrollArea para permitir rolagem interna quando houver muitos dados
-- A pagina `/customers/:id` continua existindo normalmente para acesso direto
-
+- O hook `useInvoices` ja busca todos os dados e aplica filtros no client-side. Basta armazenar o array completo filtrado (antes do `.slice` de paginacao) em um novo estado e expor via retorno do hook.
+- A geracao do XLSX usara `xlsx.utils.json_to_sheet` com headers em portugues e `xlsx.writeFile` para download direto.
+- Nenhuma nova dependencia necessaria - `xlsx` ja esta no `package.json`.
