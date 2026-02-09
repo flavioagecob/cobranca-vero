@@ -5,6 +5,7 @@ import type { PaginationState } from '@/types/customer';
 
 interface UseInvoicesReturn {
   invoices: Invoice[];
+  allFilteredInvoices: Invoice[];
   isLoading: boolean;
   error: string | null;
   pagination: PaginationState;
@@ -40,6 +41,7 @@ const calculateStatus = (dataPagamento: string | null, dataVencimento: string): 
 
 export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [allFilteredInvoices, setAllFilteredInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState<PaginationState>({
@@ -197,8 +199,8 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
       const from = (pagination.page - 1) * pagination.pageSize;
       const paginatedInvoices = processedInvoices.slice(from, from + pagination.pageSize);
 
+      setAllFilteredInvoices(processedInvoices);
       setInvoices(paginatedInvoices);
-      setPagination((prev) => ({ ...prev, total: totalFiltered }));
 
       // Fetch unique safras and parcelas for filter options
       const { data: optionsData } = await supabase
@@ -326,6 +328,7 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
 
   return {
     invoices,
+    allFilteredInvoices,
     isLoading,
     error,
     pagination,

@@ -6,11 +6,13 @@ import { InvoiceStatsCards } from '@/components/invoices/InvoiceStatsCards';
 import { Button } from '@/components/ui/button';
 import { Download, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 import type { InvoiceStatus } from '@/types/invoice';
 
 export default function Invoices() {
   const {
     invoices,
+    allFilteredInvoices,
     isLoading,
     error,
     pagination,
@@ -34,8 +36,35 @@ export default function Invoices() {
     }
   };
 
-  const handleCardClick = (status: InvoiceStatus | 'all') => {
-    setFilters({ ...filters, status });
+  const handleExport = () => {
+    try {
+      if (allFilteredInvoices.length === 0) {
+        toast.error('Nenhuma fatura para exportar');
+        return;
+      }
+
+      const data = allFilteredInvoices.map((inv) => ({
+        'Número Fatura': inv.numero_fatura || '',
+        'Cliente': inv.customer?.nome || '',
+        'CPF/CNPJ': inv.customer?.cpf_cnpj || '',
+        'Telefone': inv.customer?.telefone || '',
+        'Safra': inv.mes_safra_cadastro || '',
+        'Valor': inv.valor || 0,
+        'Data Vencimento': inv.data_vencimento || '',
+        'Data Pagamento': inv.data_pagamento || '',
+        'Status': inv.status || '',
+        'Dias Atraso': inv.dias_atraso || 0,
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Faturas');
+      const today = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(wb, `faturas_${today}.xlsx`);
+      toast.success(`${allFilteredInvoices.length} faturas exportadas com sucesso`);
+    } catch {
+      toast.error('Erro ao exportar faturas');
+    }
   };
 
   return (
@@ -49,7 +78,12 @@ export default function Invoices() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleExport}
+            disabled={isLoading || allFilteredInvoices.length === 0}
+          >
             <Download className="h-4 w-4 mr-2" />
             Exportar
           </Button>
@@ -65,7 +99,7 @@ export default function Invoices() {
         stats={stats} 
         isLoading={isLoading} 
         currentFilter={filters.status}
-        onFilterChange={handleCardClick}
+        onFilterChange={(status: InvoiceStatus | 'all') => setFilters({ ...filters, status })}
       />
 
       {/* Filters */}
