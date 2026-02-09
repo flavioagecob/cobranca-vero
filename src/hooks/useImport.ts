@@ -212,6 +212,11 @@ export const useImport = (): UseImportReturn => {
         await importSalesOptimized(rows, fieldMap, batchId, errors, (count) => {
           successCount = count;
         }, setProgress);
+      } else if (type === 'preventive') {
+        // ===== PREVENTIVE IMPORT =====
+        await importPreventiveOptimized(rows, fieldMap, batchId, errors, (count) => {
+          successCount = count;
+        }, setProgress);
       } else {
         // ===== OPTIMIZED OPERATOR IMPORT =====
         setProgress(5); // Loading caches...
@@ -392,6 +397,35 @@ export const useImport = (): UseImportReturn => {
         }
 
         console.log(`[Import] Updated ${toUpdate.length} existing contracts`);
+        
+        // STEP 6: Cross-reference with preventive leads - migrate matched ones
+        try {
+          // Get all matched sales_base IDs that are preventive
+          const matchedSalesIds = [...toInsert, ...toUpdate.map(u => u.data)]
+            .map(c => c.sales_base_id)
+            .filter(Boolean);
+          
+          if (matchedSalesIds.length > 0) {
+            const { data: preventiveRecords } = await supabase
+              .from('sales_base')
+              .select('id')
+              .in('id', matchedSalesIds)
+              .eq('status_cobranca', 'preventivo');
+            
+            if (preventiveRecords && preventiveRecords.length > 0) {
+              const preventiveIds = preventiveRecords.map(r => r.id);
+              await supabase
+                .from('sales_base')
+                .update({ status_cobranca: 'migrado' })
+                .in('id', preventiveIds);
+              
+              console.log(`[Import] Migrated ${preventiveIds.length} preventive leads to regular flow`);
+            }
+          }
+        } catch (crossRefErr) {
+          console.error('[Import] Cross-reference error:', crossRefErr);
+        }
+        
         setProgress(95);
       }
 
@@ -589,6 +623,158 @@ async function importSalesOptimized(
 
     if (error) {
       console.error(`[Import] Sales insert error batch ${i + 1}:`, error.message);
+      errors.push({ row: 0, message: `Erro no batch ${i + 1}: ${error.message}` });
+    } else {
+      successCount += batchData.length;
+    }
+
+    const progress = 60 + Math.round((i + 1) / salesBatches * 35);
+    setProgress(progress);
+  }
+
+  setSuccessCount(successCount);
+  setProgress(95);
+}
+
+// Optimized preventive import with bulk operations
+async function importPreventiveOptimized(
+  rows: ParsedRow[],
+  fieldMap: Record<string, string>,
+  batchId: string,
+  errors: ImportError[],
+  setSuccessCount: (count: number) => void,
+  setProgress: (progress: number) => void
+) {
+  const getValue = (row: ParsedRow, field: string): string | number | null => {
+    const sourceCol = fieldMap[field];
+    if (!sourceCol) return null;
+    const val = row[sourceCol];
+    if (val === null || val === undefined || val === '') return null;
+    return val as string | number;
+  };
+  
+  const getStringValue = (row: ParsedRow, field: string): string | null => {
+    const val = getValue(row, field);
+    if (val === null) return null;
+    return String(val);
+  };
+
+  // STEP 1: Extract and validate all customer data
+  const customersToUpsert: Map<string, any> = new Map();
+  const validRows: { row: ParsedRow; rowIndex: number; cpfCnpj: string }[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowIndex = i + 2;
+
+    const cpfCnpj = formatCpfCnpj(getStringValue(row, 'cpf_cnpj'));
+    const nome = getStringValue(row, 'nome');
+    const os = getStringValue(row, 'os');
+
+    if (!cpfCnpj) {
+      errors.push({ row: rowIndex, field: 'cpf_cnpj', message: 'CPF/CNPJ obrigatório' });
+      continue;
+    }
+
+    if (!nome) {
+      errors.push({ row: rowIndex, field: 'nome', message: 'Nome obrigatório' });
+      continue;
+    }
+
+    if (!os) {
+      errors.push({ row: rowIndex, field: 'os', message: 'OS obrigatória' });
+      continue;
+    }
+
+    customersToUpsert.set(cpfCnpj, {
+      cpf_cnpj: cpfCnpj,
+      nome,
+      email: getStringValue(row, 'email'),
+      telefone: getStringValue(row, 'telefone'),
+      telefone2: getStringValue(row, 'telefone2'),
+    });
+
+    validRows.push({ row, rowIndex, cpfCnpj });
+  }
+
+  setProgress(20);
+
+  // STEP 2: Bulk upsert customers
+  const customersArray = Array.from(customersToUpsert.values());
+  const CUSTOMER_BATCH_SIZE = 200;
+  const customerBatches = Math.ceil(customersArray.length / CUSTOMER_BATCH_SIZE);
+
+  for (let i = 0; i < customerBatches; i++) {
+    const batchData = customersArray.slice(i * CUSTOMER_BATCH_SIZE, (i + 1) * CUSTOMER_BATCH_SIZE);
+    
+    const { error } = await supabase
+      .from('customers')
+      .upsert(batchData, { onConflict: 'cpf_cnpj' });
+
+    if (error) {
+      console.error(`[Import] Customer upsert error batch ${i + 1}:`, error.message);
+    }
+  }
+
+  setProgress(40);
+
+  // STEP 3: Fetch all customer IDs
+  const cpfList = Array.from(customersToUpsert.keys());
+  const { data: customers, error: fetchError } = await supabase
+    .from('customers')
+    .select('id, cpf_cnpj')
+    .in('cpf_cnpj', cpfList);
+
+  if (fetchError) {
+    throw fetchError;
+  }
+
+  const customerIdMap = new Map<string, string>();
+  for (const c of customers || []) {
+    customerIdMap.set(c.cpf_cnpj, c.id);
+  }
+
+  setProgress(50);
+
+  // STEP 4: Build sales records with status_cobranca = 'preventivo'
+  const salesToInsert: any[] = [];
+  
+  for (const { row, rowIndex, cpfCnpj } of validRows) {
+    const customerId = customerIdMap.get(cpfCnpj);
+    if (!customerId) {
+      errors.push({ row: rowIndex, message: 'Cliente não encontrado após upsert' });
+      continue;
+    }
+
+    const os = getStringValue(row, 'os');
+
+    salesToInsert.push({
+      customer_id: customerId,
+      os: os!.replace(/\D/g, ''),
+      mes_safra: getStringValue(row, 'mes_safra'),
+      data_vencimento: parseDate(getStringValue(row, 'data_vencimento')),
+      status_cobranca: 'preventivo',
+      import_batch_id: batchId,
+      raw_data: row,
+    });
+  }
+
+  setProgress(60);
+
+  // STEP 5: Bulk insert sales records
+  const SALES_BATCH_SIZE = 200;
+  const salesBatches = Math.ceil(salesToInsert.length / SALES_BATCH_SIZE);
+  let successCount = 0;
+
+  for (let i = 0; i < salesBatches; i++) {
+    const batchData = salesToInsert.slice(i * SALES_BATCH_SIZE, (i + 1) * SALES_BATCH_SIZE);
+    
+    const { error } = await supabase
+      .from('sales_base')
+      .insert(batchData);
+
+    if (error) {
+      console.error(`[Import] Preventive insert error batch ${i + 1}:`, error.message);
       errors.push({ row: 0, message: `Erro no batch ${i + 1}: ${error.message}` });
     } else {
       successCount += batchData.length;

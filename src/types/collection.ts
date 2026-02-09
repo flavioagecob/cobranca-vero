@@ -182,3 +182,62 @@ Departamento Financeiro`,
     ativo: true,
   },
 ];
+
+// Preventive message templates - friendly reminders, no aggressive collection tone
+export const PREVENTIVE_TEMPLATES: MessageTemplate[] = [
+  {
+    id: 'prev-1',
+    nome: 'Lembrete de Vencimento',
+    canal: 'whatsapp',
+    assunto: null,
+    conteudo: `Olá {nome}! 👋
+
+Passando para lembrar que sua fatura vence em {data_vencimento}.
+
+📋 CPF: ***{cpf_ultimos5}
+
+Fique atento para evitar atrasos! Em caso de dúvidas, estamos à disposição.
+
+Atenciosamente,
+Equipe Vero Fibra`,
+    variaveis: ['nome', 'cpf_ultimos5', 'data_vencimento'],
+    ativo: true,
+  },
+  {
+    id: 'prev-2',
+    nome: 'Boas-vindas + Lembrete',
+    canal: 'whatsapp',
+    assunto: null,
+    conteudo: `Olá {nome}! 🎉
+
+Seja bem-vindo(a) à Vero Fibra! Estamos felizes em tê-lo como cliente.
+
+Gostaríamos de lembrar que sua primeira fatura vence em {data_vencimento}.
+
+📋 CPF: ***{cpf_ultimos5}
+
+Qualquer dúvida, estamos aqui para ajudar!
+
+Atenciosamente,
+Equipe Vero Fibra`,
+    variaveis: ['nome', 'cpf_ultimos5', 'data_vencimento'],
+    ativo: true,
+  },
+  {
+    id: 'prev-3',
+    nome: 'Vencimento Próximo',
+    canal: 'whatsapp',
+    assunto: null,
+    conteudo: `Olá {nome}!
+
+⏰ Sua fatura vence amanhã ({data_vencimento}).
+
+📋 CPF: ***{cpf_ultimos5}
+
+Não esqueça de efetuar o pagamento para manter seus serviços em dia!
+
+Estamos à disposição.`,
+    variaveis: ['nome', 'cpf_ultimos5', 'data_vencimento'],
+    ativo: true,
+  },
+];

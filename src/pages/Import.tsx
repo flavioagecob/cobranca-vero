@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileSpreadsheet, Building2, AlertTriangle } from 'lucide-react';
+import { FileSpreadsheet, Building2, AlertTriangle, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -18,7 +18,7 @@ import type {
   ImportPreview, 
   ImportResult as ImportResultType 
 } from '@/types/import';
-import { SALES_FIELDS, OPERATOR_FIELDS } from '@/types/import';
+import { SALES_FIELDS, OPERATOR_FIELDS, PREVENTIVE_FIELDS } from '@/types/import';
 import { useAuth } from '@/contexts/AuthContext';
 
 type ImportStep = 'upload' | 'mapping' | 'importing' | 'result';
@@ -41,7 +41,7 @@ const Import = () => {
 
   // Initialize mappings when type changes
   const initializeMappings = useCallback((type: ImportType, headers: string[]) => {
-    const fields = type === 'sales' ? SALES_FIELDS : OPERATOR_FIELDS;
+    const fields = type === 'sales' ? SALES_FIELDS : type === 'preventive' ? PREVENTIVE_FIELDS : OPERATOR_FIELDS;
     
     // Sinônimos expandidos para auto-match - inclui colunas comuns das planilhas
     const synonyms: Record<string, string[]> = {
@@ -319,6 +319,10 @@ const Import = () => {
                       <Building2 className="h-4 w-4" />
                       Base Operadora
                     </TabsTrigger>
+                    <TabsTrigger value="preventive" className="flex items-center gap-2">
+                      <CalendarClock className="h-4 w-4" />
+                      Base Preventiva
+                    </TabsTrigger>
                   </TabsList>
                 </Tabs>
               )}
@@ -343,16 +347,18 @@ const Import = () => {
 
                 <div className="bg-muted/50 rounded-lg p-4">
                   <h4 className="font-medium text-foreground mb-2">
-                    {importType === 'sales' ? 'Base de Vendas' : 'Base Operadora'}
+                    {importType === 'sales' ? 'Base de Vendas' : importType === 'preventive' ? 'Base Preventiva' : 'Base Operadora'}
                   </h4>
                   <p className="text-sm text-muted-foreground">
                     {importType === 'sales'
                       ? 'Planilha com dados de vendas, incluindo OS (Ordem de Serviço), dados do cliente, produto e plano.'
+                      : importType === 'preventive'
+                      ? 'Planilha com dados de clientes novos para cobrança preventiva. Apenas OS, dados do cliente e data de vencimento.'
                       : 'Planilha da operadora com ID do contrato, status e datas de ativação/cancelamento.'}
                   </p>
                   <p className="text-sm text-muted-foreground mt-2">
                     <strong>Chave de Match:</strong>{' '}
-                    {importType === 'sales' ? 'OS (Ordem de Serviço)' : 'ID Contrato'}
+                    {importType === 'sales' || importType === 'preventive' ? 'OS (Ordem de Serviço)' : 'ID Contrato'}
                   </p>
                 </div>
               </>
