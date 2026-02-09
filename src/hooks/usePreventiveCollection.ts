@@ -26,7 +26,7 @@ export interface PreventiveStats {
   totalNaFila: number;
   vence7dias: number;
   vence15dias: number;
-  valorTotal: number;
+  taxaContato: number;
   cobradosHoje: number;
 }
 
@@ -68,7 +68,7 @@ export const usePreventiveCollection = (): UsePreventiveCollectionReturn => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [attempts, setAttempts] = useState<CollectionAttempt[]>([]);
   const [stats, setStats] = useState<PreventiveStats>({
-    totalNaFila: 0, vence7dias: 0, vence15dias: 0, valorTotal: 0, cobradosHoje: 0,
+    totalNaFila: 0, vence7dias: 0, vence15dias: 0, taxaContato: 0, cobradosHoje: 0,
   });
   const [safras, setSafras] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -178,11 +178,14 @@ export const usePreventiveCollection = (): UsePreventiveCollectionReturn => {
       const vence7dias = items.filter(l => l.dias_ate_vencer <= 7).length;
       const cobradosHoje = items.filter(l => attemptedTodaySet.has(l.customer_id)).length;
 
+      const contatados = items.filter(l => attemptMap.has(l.customer_id)).length;
+      const taxaContato = items.length > 0 ? Math.round((contatados / items.length) * 100) : 0;
+
       setStats({
         totalNaFila: items.filter(l => !attemptedTodaySet.has(l.customer_id)).length,
         vence7dias,
         vence15dias: items.length,
-        valorTotal: 0, // Preventive has no value
+        taxaContato,
         cobradosHoje,
       });
 
