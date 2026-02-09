@@ -46,7 +46,7 @@ export function PreventiveQueue({
   };
 
   return (
-    <div className="flex flex-col h-full border rounded-lg bg-card">
+    <div className="flex flex-col h-full border rounded-lg bg-card overflow-hidden">
       <div className="p-3 border-b space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
