@@ -1,183 +1,153 @@
 
 
-# Plano: Cobrança Antecipada (Preventiva) + Novo Campo Safra
+# Plano: Sistema Completo de Cobranca Preventiva
 
-## Resumo do Que Será Feito
+## Resumo
 
-Vamos implementar duas mudanças principais:
+Transformar a pagina de Cobranca Preventiva de uma lista simples para um sistema operacional completo, similar a pagina de Cobranca de vencidos. Isso inclui:
 
-1. **Novo campo na importação de vendas**: Adicionar "Mês Safra" e "Data de Vencimento" na planilha de vendas
-2. **Nova página de Cobrança Preventiva**: Uma página separada para trabalhar clientes que ainda não venceram
-
----
-
-## Entendendo a Mudança
-
-### Situação Atual
-
-| Base de Vendas | Base Operadora |
-|----------------|----------------|
-| Dados do cliente + OS | Dados de contrato vencido |
-| Sem vencimento | Com data de vencimento |
-| Sem safra | Com mês safra |
-
-**Fluxo atual**: Vendas → Operadora (match) → Cobrança (só vencidos)
-
-### Situação Nova
-
-| Base de Vendas (ampliada) | Base Operadora |
-|---------------------------|----------------|
-| Dados do cliente + OS | Dados de contrato vencido |
-| **Com data de vencimento** | Com data de vencimento |
-| **Com mês safra** | Com mês safra |
-| **Com valor** | Com valor |
-
-**Novo fluxo**: 
-- Vendas com vencimento futuro → **Cobrança Preventiva** (antes de vencer)
-- Operadora com vencimento passado → **Cobrança** (já vencido)
+1. **Nova aba de importacao "Preventiva"** com campos simplificados (sem valor, sem contrato)
+2. **Pagina operacional completa** com fila lateral, painel do cliente, templates de mensagem, registro de contato e historico
+3. **Cruzamento automatico** quando a base da operadora e importada: se o cliente preventivo aparece na operadora, ele sai da preventiva e entra no fluxo normal
 
 ---
 
-## 1. Mudanças no Banco de Dados
+## O Que Muda
 
-### Novos campos na tabela `sales_base`:
+### Importacao
 
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `mes_safra` | text | Mês da safra (ex: "2025-01") |
-| `data_vencimento` | date | Data do vencimento previsto |
-| `valor` | numeric | Valor a ser cobrado |
-| `status_cobranca` | text | 'pendente', 'cobrado', 'pago' |
+Hoje existem 2 tipos de importacao: "Base de Vendas" e "Base Operadora". Vamos adicionar um terceiro tipo: **"Base Preventiva"**.
 
----
+| Campo | Obrigatorio | Descricao |
+|-------|-------------|-----------|
+| OS (Ordem de Servico) | Sim | Chave de identificacao |
+| CPF/CNPJ | Sim | Identificar o cliente |
+| Nome | Sim | Nome do cliente |
+| Telefone | Nao | Para contato |
+| Telefone 2 | Nao | Para contato |
+| Email | Nao | Para contato |
+| Data Vencimento | Nao | Quando vence |
+| Mes Safra | Nao | Safra da venda |
 
-## 2. Mudanças na Importação
+Nota: Sem campo de valor, sem plano, sem produto -- apenas dados basicos para contato preventivo.
 
-### Novos campos mapeáveis na Base de Vendas:
+### Pagina de Cobranca Preventiva
 
-| Campo | Rótulo | Obrigatório |
-|-------|--------|-------------|
-| mes_safra | Mês Safra | Não |
-| data_vencimento | Data de Vencimento | Não |
-| valor | Valor | Não |
+A pagina atual mostra cards expandiveis. Vamos transforma-la no mesmo layout da Cobranca de vencidos:
 
-O sistema de auto-match também será atualizado para reconhecer colunas como "SAFRA", "VENCIMENTO", "VALOR", etc.
+- **Coluna esquerda (3 colunas)**: Fila de clientes com busca
+- **Coluna direita (9 colunas)**: Painel do cliente selecionado com:
+  - Card de informacoes do cliente
+  - Templates de mensagem (com templates especificos para lembrete de vencimento)
+  - Formulario de registro de tentativa
+  - Historico de contatos
+  - Navegacao anterior/proximo
 
----
+### Cruzamento Automatico (Operadora x Preventiva)
 
-## 3. Nova Página: Cobrança Preventiva
-
-### Acesso
-
-- Nova entrada no menu lateral: **"Cobrança Preventiva"** (ícone de calendário)
-- Rota: `/preventive-collection`
-- Acessível por: admin, supervisor, cobrador
-
-### Funcionalidades
-
-A página terá a mesma estrutura da Cobrança atual, mas:
-
-| Cobrança (atual) | Cobrança Preventiva (nova) |
-|------------------|---------------------------|
-| Busca em `operator_contracts` | Busca em `sales_base` |
-| `data_vencimento < hoje` | `data_vencimento >= hoje` e `data_vencimento <= hoje + 15 dias` |
-| Faturas já vencidas | Faturas prestes a vencer |
-| Cor vermelha (urgência) | Cor amarela/laranja (atenção) |
-
-### Cards de Estatísticas
-
-- **A Vencer em 7 dias**: Quantidade de leads
-- **A Vencer em 15 dias**: Quantidade de leads
-- **Valor Total a Vencer**: Soma dos valores
-- **Cobrados Hoje**: Leads contatados preventivamente hoje
-
-### Filtros
-
-- Safra (usa `sales_base.mes_safra`)
-- Dias até vencer: "Hoje", "1-7 dias", "8-15 dias"
+Quando a base da operadora e importada, o sistema faz o match pelo campo `os` (OS da sales_base). Se encontrar match:
+- O registro `sales_base` correspondente tem seu `status_cobranca` atualizado para `'migrado'`
+- O cliente passa a ter contrato na operadora e entra no fluxo normal de cobranca de vencidos
+- Na fila preventiva, registros com `status_cobranca = 'migrado'` sao excluidos automaticamente
 
 ---
 
-## 4. Arquivos a Criar/Modificar
+## Detalhes Tecnicos
 
-### Banco de Dados
+### 1. Tipo de Importacao
 
-| Alteração | Descrição |
-|-----------|-----------|
-| Migration SQL | Adicionar campos à tabela `sales_base` |
+**Arquivo: `src/types/import.ts`**
+- Adicionar tipo `'preventive'` ao `ImportType`
+- Criar `PREVENTIVE_FIELDS` com campos simplificados (os, cpf_cnpj, nome, telefone, telefone2, email, data_vencimento, mes_safra)
+- Adicionar labels dos campos novos
 
-### Importação
+### 2. Pagina de Importacao
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/types/import.ts` | Adicionar novos campos em `SALES_FIELDS` |
-| `src/hooks/useImport.ts` | Incluir novos campos no processamento |
+**Arquivo: `src/pages/Import.tsx`**
+- Adicionar terceira aba "Base Preventiva" com icone CalendarClock
+- Atualizar sinonimos de auto-match para os campos preventivos
+- Atualizar descricao da aba
 
-### Nova Página
+### 3. Hook de Importacao
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/pages/PreventiveCollection.tsx` | Nova página de cobrança preventiva |
-| `src/hooks/usePreventiveCollection.ts` | Hook para buscar dados de vendas a vencer |
-| `src/components/preventive/PreventiveQueue.tsx` | Lista de clientes |
-| `src/components/preventive/PreventiveStatsCards.tsx` | Cards de estatísticas |
+**Arquivo: `src/hooks/useImport.ts`**
+- Adicionar funcao `importPreventiveOptimized` similar a `importSalesOptimized`
+- Fluxo: upsert customers -> inserir em sales_base com `status_cobranca = 'preventivo'`
+- Os registros preventivos sao inseridos na mesma tabela `sales_base` mas com status diferenciado
 
-### Navegação
+### 4. Cruzamento na Importacao da Operadora
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/layout/AppSidebar.tsx` | Adicionar menu "Cobrança Preventiva" |
-| `src/App.tsx` | Adicionar rota `/preventive-collection` |
+**Arquivo: `src/hooks/useImport.ts`**
+- Ao importar operadora, apos fazer match com sales_base, verificar se o registro tem `status_cobranca = 'preventivo'`
+- Se sim, atualizar para `status_cobranca = 'migrado'`
+- Isso remove automaticamente o lead da fila preventiva
+
+### 5. Hook da Cobranca Preventiva
+
+**Arquivo: `src/hooks/usePreventiveCollection.ts`**
+- Refatorar para retornar dados no formato de fila (similar ao `useCollection`)
+- Adicionar: selectedCustomer, selectCustomer, nextCustomer, previousCustomer
+- Adicionar: registerAttempt (registrar contato preventivo)
+- Filtrar apenas registros com `status_cobranca` diferente de `'migrado'` e `'pago'`
+- Buscar historico de tentativas de contato por customer_id
+
+### 6. Pagina de Cobranca Preventiva
+
+**Arquivo: `src/pages/PreventiveCollection.tsx`**
+- Reestruturar com layout de 2 paineis (fila + painel do cliente)
+- Fila lateral com busca e lista de clientes
+- Painel principal com: informacoes do cliente, templates de mensagem, formulario de tentativa, historico
+- Navegacao anterior/proximo
+
+### 7. Novos Componentes Preventivos
+
+**Arquivo: `src/components/preventive/PreventiveCustomerCard.tsx`** (criar)
+- Card de informacoes do cliente adaptado para preventivo
+- Mostra: nome, CPF, telefone, email, data de vencimento, dias ate vencer
+- Sem valor pendente (dados preventivos nao tem valor)
+- Botoes de acao rapida (ligar, WhatsApp, email)
+
+**Arquivo: `src/components/preventive/PreventiveQueue.tsx`** (refatorar)
+- Transformar de lista expandivel para fila lateral compacta (similar a CollectionQueue)
+- Mostrar nome, dias ate vencer, badge de status
+
+### 8. Templates de Mensagem Preventivos
+
+**Arquivo: `src/types/collection.ts`**
+- Adicionar templates especificos para lembrete de vencimento (tom amigavel, sem cobranca agressiva)
+- Variaveis: {nome}, {cpf_ultimos5}, {data_vencimento}
 
 ---
 
-## 5. Interface Visual
+## Arquivos a Criar/Modificar
 
-### Menu Lateral (Sidebar)
+| Arquivo | Acao | Descricao |
+|---------|------|-----------|
+| `src/types/import.ts` | Modificar | Adicionar tipo 'preventive' e PREVENTIVE_FIELDS |
+| `src/pages/Import.tsx` | Modificar | Adicionar aba "Base Preventiva" |
+| `src/hooks/useImport.ts` | Modificar | Logica de importacao preventiva + cruzamento |
+| `src/hooks/usePreventiveCollection.ts` | Refatorar | Hook completo com fila, selecao, tentativas |
+| `src/pages/PreventiveCollection.tsx` | Refatorar | Layout operacional com 2 paineis |
+| `src/components/preventive/PreventiveQueue.tsx` | Refatorar | Fila lateral compacta |
+| `src/components/preventive/PreventiveCustomerCard.tsx` | Criar | Card do cliente preventivo |
+| `src/components/preventive/PreventiveStatsCards.tsx` | Manter | Atualizar stats se necessario |
+| `src/components/preventive/PreventiveFilters.tsx` | Manter | Filtros existentes |
+| `src/types/collection.ts` | Modificar | Adicionar templates preventivos |
+
+**Total: ~10 arquivos**
+
+---
+
+## Fluxo do Operador
 
 ```text
-Principal
-├── Dashboard
-├── Clientes
-├── Faturas
-├── Cobrança           ← vencidos (existente)
-├── Cobrança Preventiva ← a vencer (NOVO)
-└── Conciliação
+1. Admin importa "Base Preventiva" (clientes novos)
+2. Leads aparecem na Cobranca Preventiva
+3. Operador trabalha a fila: envia lembretes, registra contatos
+4. Admin importa "Base Operadora" (faturas vencidas)
+5. Sistema cruza automaticamente:
+   - Se cliente preventivo aparece na operadora -> sai da preventiva
+   - Cliente passa para Cobranca (vencidos) com contrato e fatura
+6. Leads que nao cruzaram continuam na preventiva
 ```
-
-### Diferenciação Visual
-
-| Elemento | Cobrança | Cobrança Preventiva |
-|----------|----------|---------------------|
-| Ícone | Phone (telefone) | CalendarClock (calendário) |
-| Cor principal | Vermelho | Amarelo/Laranja |
-| Título | "Fila de clientes com faturas vencidas" | "Fila de clientes com faturas a vencer" |
-| Badge dias | "X dias de atraso" | "Vence em X dias" |
-
----
-
-## 6. Fluxo de Trabalho do Operador
-
-### Cobrança Preventiva (manhã)
-1. Filtrar por "Vence em 1-7 dias"
-2. Ligar/enviar WhatsApp lembrando do vencimento
-3. Registrar tentativa com status "lembrete enviado"
-
-### Cobrança Vencida (tarde)
-1. Trabalhar clientes que já venceram
-2. Cobrar valores em atraso
-3. Negociar promessas de pagamento
-
----
-
-## Resumo das Mudanças
-
-| Etapa | Arquivos |
-|-------|----------|
-| 1. Migration banco | 1 arquivo SQL |
-| 2. Tipos importação | 1 arquivo |
-| 3. Hook importação | 1 arquivo |
-| 4. Nova página + componentes | 4 arquivos |
-| 5. Navegação (sidebar + rotas) | 2 arquivos |
-| **Total** | **~9 arquivos** |
 
