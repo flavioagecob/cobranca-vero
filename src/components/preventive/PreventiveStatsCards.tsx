@@ -1,6 +1,5 @@
-import { CalendarClock, Clock, DollarSign, CheckCircle } from 'lucide-react';
+import { CalendarClock, Clock, BarChart3, CheckCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { formatCurrency } from '@/lib/formatters';
 import type { PreventiveStats } from '@/hooks/usePreventiveCollection';
 
 interface PreventiveStatsCardsProps {
@@ -27,10 +26,10 @@ export function PreventiveStatsCards({ stats, isLoading }: PreventiveStatsCardsP
       bgColor: 'bg-orange-500/10',
     },
     {
-      title: 'Valor Total',
-      value: formatCurrency(stats.valorTotal),
-      icon: DollarSign,
-      description: 'A vencer',
+      title: 'Taxa de Contato',
+      value: `${stats.taxaContato}%`,
+      icon: BarChart3,
+      description: 'Clientes já contatados',
       iconColor: 'text-blue-500',
       bgColor: 'bg-blue-500/10',
     },
