@@ -117,9 +117,9 @@ export default function PreventiveCollection() {
       <PreventiveStatsCards stats={stats} isLoading={isLoading} />
 
       {/* Main Content - Two Pane Layout */}
-      <div className="grid gap-4 lg:grid-cols-12 overflow-hidden" style={{ height: 'calc(100vh - 280px)' }}>
+      <div className="grid gap-4 lg:grid-cols-12">
         {/* Queue Sidebar */}
-        <div className="lg:col-span-3 h-full">
+        <div className="lg:col-span-3 h-[calc(100vh-300px)] overflow-hidden">
           <PreventiveQueue
             queue={queue}
             selectedCustomerId={selectedCustomer?.id || null}
@@ -129,7 +129,7 @@ export default function PreventiveCollection() {
         </div>
 
         {/* Main Panel */}
-        <div className="lg:col-span-9 space-y-4 overflow-y-auto">
+        <div className="lg:col-span-9 space-y-4">
           {selectedCustomer ? (
             <>
               {/* Navigation */}
