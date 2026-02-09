@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Phone, Mail, Copy, ExternalLink, CalendarClock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,13 +9,14 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { PreventiveQueueItem } from '@/hooks/usePreventiveCollection';
 import { toast } from 'sonner';
-import { Link } from 'react-router-dom';
+import { CustomerDetailDialog } from '@/components/shared/CustomerDetailDialog';
 
 interface PreventiveCustomerCardProps {
   customer: PreventiveQueueItem;
 }
 
 export function PreventiveCustomerCard({ customer }: PreventiveCustomerCardProps) {
+  const [dialogOpen, setDialogOpen] = useState(false);
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copiado!`);
@@ -38,11 +40,9 @@ export function PreventiveCustomerCard({ customer }: PreventiveCustomerCardProps
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Cliente</CardTitle>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to={`/customers/${customer.customer_id}`}>
-              <ExternalLink className="h-4 w-4 mr-1" />
-              Ver Ficha
-            </Link>
+          <Button variant="ghost" size="sm" onClick={() => setDialogOpen(true)}>
+            <ExternalLink className="h-4 w-4 mr-1" />
+            Ver Ficha
           </Button>
         </div>
       </CardHeader>
@@ -119,6 +119,11 @@ export function PreventiveCustomerCard({ customer }: PreventiveCustomerCardProps
         </div>
 
       </CardContent>
+      <CustomerDetailDialog
+        customerId={customer.customer_id}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
     </Card>
   );
 }

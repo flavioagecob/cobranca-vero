@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Phone, MessageCircle, Mail, User, Copy, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { formatCpfCnpj, formatPhone, formatCurrency } from '@/lib/formatters';
 import type { CollectionQueueItem } from '@/types/collection';
 import { toast } from 'sonner';
-import { Link } from 'react-router-dom';
+import { CustomerDetailDialog } from '@/components/shared/CustomerDetailDialog';
 
 interface CustomerInfoCardProps {
   customer: CollectionQueueItem;
@@ -14,6 +15,7 @@ interface CustomerInfoCardProps {
 }
 
 export function CustomerInfoCard({ customer, onStartAttempt }: CustomerInfoCardProps) {
+  const [dialogOpen, setDialogOpen] = useState(false);
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copiado!`);
@@ -41,11 +43,9 @@ export function CustomerInfoCard({ customer, onStartAttempt }: CustomerInfoCardP
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Cliente</CardTitle>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to={`/customers/${customer.customer_id}`}>
-              <ExternalLink className="h-4 w-4 mr-1" />
-              Ver Ficha
-            </Link>
+          <Button variant="ghost" size="sm" onClick={() => setDialogOpen(true)}>
+            <ExternalLink className="h-4 w-4 mr-1" />
+            Ver Ficha
           </Button>
         </div>
       </CardHeader>
@@ -192,6 +192,11 @@ export function CustomerInfoCard({ customer, onStartAttempt }: CustomerInfoCardP
           </div>
         </div>
       </CardContent>
+      <CustomerDetailDialog
+        customerId={customer.customer_id}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
     </Card>
   );
 }
