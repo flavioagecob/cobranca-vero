@@ -90,7 +90,8 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
           data_pagamento,
           mes_safra_cadastro,
           created_at,
-          customer:customers(id, nome, cpf_cnpj, telefone, email)
+          customer:customers(id, nome, cpf_cnpj, telefone, email),
+          sales_base:sales_base_id(os)
         `);
 
       // Apply safra filter (server-side)
@@ -119,6 +120,10 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
           ? contract.customer[0] 
           : contract.customer;
         
+        const salesBaseData = Array.isArray((contract as any).sales_base)
+          ? (contract as any).sales_base[0]
+          : (contract as any).sales_base;
+        
         return {
           id: contract.id,
           customer_id: contract.customer_id,
@@ -131,6 +136,7 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
           status,
           dias_atraso: diasAtraso,
           mes_safra_cadastro: contract.mes_safra_cadastro,
+          os: salesBaseData?.os || null,
           observacoes: null,
           created_at: contract.created_at,
           updated_at: contract.created_at,

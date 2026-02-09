@@ -21,6 +21,7 @@ export interface Invoice {
   status: InvoiceStatus;
   dias_atraso: number;
   mes_safra_cadastro: string | null;
+  os: string | null;
   observacoes: string | null;
   created_at: string;
   updated_at: string;

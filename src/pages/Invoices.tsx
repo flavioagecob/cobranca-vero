@@ -44,6 +44,7 @@ export default function Invoices() {
       }
 
       const data = allFilteredInvoices.map((inv) => ({
+        'OS': inv.os || '',
         'Número Fatura': inv.numero_fatura || '',
         'Cliente': inv.customer?.nome || '',
         'CPF/CNPJ': inv.customer?.cpf_cnpj || '',

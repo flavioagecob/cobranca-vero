@@ -48,6 +48,7 @@ export function InvoiceTable({ invoices, isLoading, onStatusChange, sortState, o
         <Table>
           <TableHeader>
           <TableRow>
+            <TableHead>OS</TableHead>
             <TableHead>Fatura</TableHead>
             <TableHead>Cliente</TableHead>
             <TableHead>Safra</TableHead>
@@ -59,8 +60,9 @@ export function InvoiceTable({ invoices, isLoading, onStatusChange, sortState, o
           </TableRow>
           </TableHeader>
           <TableBody>
-            {Array.from({ length: 10 }).map((_, i) => (
+             {Array.from({ length: 10 }).map((_, i) => (
               <TableRow key={i}>
+                <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-40" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-20" /></TableCell>
@@ -101,6 +103,7 @@ export function InvoiceTable({ invoices, isLoading, onStatusChange, sortState, o
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead>OS</TableHead>
             <SortableHeader
               field="numero_fatura"
               currentField={sortState.field}
@@ -160,6 +163,11 @@ export function InvoiceTable({ invoices, isLoading, onStatusChange, sortState, o
 
             return (
               <TableRow key={invoice.id}>
+                <TableCell>
+                  <span className="font-mono text-sm text-muted-foreground">
+                    {invoice.os || '-'}
+                  </span>
+                </TableCell>
                 <TableCell>
                   <span className="font-mono text-sm font-medium">
                     {invoice.numero_fatura}
