@@ -117,7 +117,7 @@ export default function PreventiveCollection() {
       <PreventiveStatsCards stats={stats} isLoading={isLoading} />
 
       {/* Main Content - Two Pane Layout */}
-      <div className="grid gap-4 lg:grid-cols-12 h-[calc(100vh-300px)]">
+      <div className="grid gap-4 lg:grid-cols-12 overflow-hidden" style={{ height: 'calc(100vh - 280px)' }}>
         {/* Queue Sidebar */}
         <div className="lg:col-span-3 h-full">
           <PreventiveQueue
