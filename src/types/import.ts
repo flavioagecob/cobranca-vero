@@ -1,6 +1,6 @@
 // Types for the import system
 
-export type ImportType = 'sales' | 'operator';
+export type ImportType = 'sales' | 'operator' | 'preventive';
 
 export interface ColumnMapping {
   sourceColumn: string;
@@ -66,6 +66,17 @@ export const OPERATOR_FIELDS: ColumnMapping[] = [
   { sourceColumn: '', targetField: 'data_vencimento', required: false },
   { sourceColumn: '', targetField: 'data_pagamento', required: false },
   { sourceColumn: '', targetField: 'valor_fatura', required: false },
+];
+
+export const PREVENTIVE_FIELDS: ColumnMapping[] = [
+  { sourceColumn: '', targetField: 'os', required: true },
+  { sourceColumn: '', targetField: 'cpf_cnpj', required: true },
+  { sourceColumn: '', targetField: 'nome', required: true },
+  { sourceColumn: '', targetField: 'telefone', required: false },
+  { sourceColumn: '', targetField: 'telefone2', required: false },
+  { sourceColumn: '', targetField: 'email', required: false },
+  { sourceColumn: '', targetField: 'data_vencimento', required: false },
+  { sourceColumn: '', targetField: 'mes_safra', required: false },
 ];
 
 export const FIELD_LABELS: Record<string, string> = {

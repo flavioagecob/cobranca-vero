@@ -608,7 +608,7 @@ export type Database = {
         | "caixa_postal"
       collection_channel: "whatsapp" | "telefone" | "email" | "sms"
       customer_status: "ativo" | "inadimplente" | "cancelado" | "suspenso"
-      import_type: "sales" | "operator"
+      import_type: "sales" | "operator" | "preventive"
       invoice_status:
         | "pendente"
         | "pago"
@@ -759,7 +759,7 @@ export const Constants = {
       ],
       collection_channel: ["whatsapp", "telefone", "email", "sms"],
       customer_status: ["ativo", "inadimplente", "cancelado", "suspenso"],
-      import_type: ["sales", "operator"],
+      import_type: ["sales", "operator", "preventive"],
       invoice_status: [
         "pendente",
         "pago",
