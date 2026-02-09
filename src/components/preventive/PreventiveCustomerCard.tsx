@@ -1,4 +1,4 @@
-import { Phone, MessageCircle, Mail, Copy, ExternalLink, CalendarClock } from 'lucide-react';
+import { Phone, Mail, Copy, ExternalLink, CalendarClock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,32 +9,16 @@ import { ptBR } from 'date-fns/locale';
 import type { PreventiveQueueItem } from '@/hooks/usePreventiveCollection';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
-import type { AttemptChannel } from '@/types/collection';
 
 interface PreventiveCustomerCardProps {
   customer: PreventiveQueueItem;
-  onStartAttempt: (channel: AttemptChannel) => void;
 }
 
-export function PreventiveCustomerCard({ customer, onStartAttempt }: PreventiveCustomerCardProps) {
+export function PreventiveCustomerCard({ customer }: PreventiveCustomerCardProps) {
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copiado!`);
   };
-
-  const cleanPhone = (phone: string | null) => phone?.replace(/\D/g, '') || null;
-
-  const whatsappLink = customer.customer_phone
-    ? `https://wa.me/55${cleanPhone(customer.customer_phone)}`
-    : null;
-
-  const phoneLink = customer.customer_phone
-    ? `tel:+55${cleanPhone(customer.customer_phone)}`
-    : null;
-
-  const emailLink = customer.customer_email
-    ? `mailto:${customer.customer_email}`
-    : null;
 
   const getDaysLabel = (dias: number) => {
     if (dias === 0) return 'Vence hoje';
@@ -134,32 +118,6 @@ export function PreventiveCustomerCard({ customer, onStartAttempt }: PreventiveC
           </div>
         </div>
 
-        <Separator />
-
-        {/* Quick Actions */}
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground font-medium">Ações Rápidas</p>
-          <div className="grid grid-cols-3 gap-2">
-            <Button variant="outline" size="sm" className="flex-col h-auto py-3"
-              disabled={!phoneLink}
-              onClick={() => { if (phoneLink) window.open(phoneLink); onStartAttempt('telefone'); }}>
-              <Phone className="h-5 w-5 mb-1 text-blue-600" />
-              <span className="text-xs">Ligar</span>
-            </Button>
-            <Button variant="outline" size="sm" className="flex-col h-auto py-3"
-              disabled={!whatsappLink}
-              onClick={() => { if (whatsappLink) window.open(whatsappLink, '_blank'); onStartAttempt('whatsapp'); }}>
-              <MessageCircle className="h-5 w-5 mb-1 text-emerald-600" />
-              <span className="text-xs">WhatsApp</span>
-            </Button>
-            <Button variant="outline" size="sm" className="flex-col h-auto py-3"
-              disabled={!emailLink}
-              onClick={() => { if (emailLink) window.open(emailLink); onStartAttempt('email'); }}>
-              <Mail className="h-5 w-5 mb-1 text-amber-600" />
-              <span className="text-xs">E-mail</span>
-            </Button>
-          </div>
-        </div>
       </CardContent>
     </Card>
   );

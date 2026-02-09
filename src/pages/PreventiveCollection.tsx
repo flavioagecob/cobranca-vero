@@ -153,7 +153,6 @@ export default function PreventiveCollection() {
                 <div className="space-y-4">
                   <PreventiveCustomerCard
                     customer={selectedCustomer}
-                    onStartAttempt={handleStartAttempt}
                   />
 
                   {showAttemptForm ? (
