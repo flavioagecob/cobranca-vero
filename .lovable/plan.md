@@ -1,15 +1,33 @@
 
+# Corrigir scroll da fila preventiva
 
-# Scroll independente na coluna principal (painel direito)
+## Problema
 
-O problema atual e que ao rolar o conteudo do painel do cliente (coluna direita), a pagina inteira rola junto. A solucao e aplicar scroll independente tambem na coluna direita, de forma que apenas o conteudo interno role.
+O `overflow-hidden` aplicado ao container grid esta impedindo o scroll da pagina inteira. O objetivo real e diferente: a fila preventiva (coluna esquerda) deve ter scroll independente para que, ao selecionar um cliente no final da lista, o operador nao precise rolar a pagina toda para ver os dados dele.
 
-## Mudanca
+## Solucao
 
 **Arquivo: `src/pages/PreventiveCollection.tsx`**
 
-- Adicionar `overflow-y-auto` na div da coluna direita (`lg:col-span-9`) para que ela tenha scroll proprio
-- Garantir que o container pai (`grid`) tenha altura fixa e `overflow-hidden` para impedir o scroll da pagina
+- Remover `overflow-hidden` do container grid para restaurar o scroll normal da pagina
+- Remover o `style={{ height: 'calc(100vh - 280px)' }}` do grid
+- Aplicar altura fixa apenas na coluna da fila (esquerda), com `h-[calc(100vh-300px)]` e `overflow-hidden`
+- Manter a coluna direita sem restricao de altura, rolando junto com a pagina normalmente
 
-A coluna da fila (esquerda) ja tem scroll independente via `ScrollArea`. Agora a coluna direita tambem tera seu proprio scroll, mantendo o header, stats e filtros sempre visiveis no topo.
+Resultado: a fila preventiva rola sozinha internamente (ja usa `ScrollArea`), e o restante da pagina rola normalmente como antes.
 
+## Mudanca especifica
+
+```text
+Antes:
+  <div className="grid ... overflow-hidden" style={{ height: 'calc(100vh - 280px)' }}>
+    <div className="lg:col-span-3 h-full">
+    <div className="lg:col-span-9 space-y-4 overflow-y-auto">
+
+Depois:
+  <div className="grid ... lg:grid-cols-12">
+    <div className="lg:col-span-3 h-[calc(100vh-300px)] overflow-hidden">
+    <div className="lg:col-span-9 space-y-4">
+```
+
+Apenas 1 arquivo modificado, 1 linha alterada no grid e 2 classes ajustadas nas colunas.
