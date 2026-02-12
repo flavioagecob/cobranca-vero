@@ -259,6 +259,7 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
 
       setAllFilteredInvoices(processedInvoices);
       setInvoices(paginatedInvoices);
+      setPagination((prev) => ({ ...prev, total: processedInvoices.length }));
 
       // Fetch stats and filter options in parallel
       await Promise.all([fetchStats(), fetchFilterOptions()]);
