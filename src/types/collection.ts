@@ -11,7 +11,8 @@ export type DelinquencyReason =
   | 'internet_sem_funcionar'
   | 'nao_recebeu_chip'
   | 'nao_ativado_streaming'
-  | 'nao_gerou_boleto';
+  | 'nao_gerou_boleto'
+  | 'cliente_nao_responde';
 
 // Status types - matching Supabase enum attempt_status
 export type AttemptResult = 'sucesso' | 'sem_resposta' | 'numero_invalido' | 'recusado' | 'caixa_postal';
@@ -82,6 +83,7 @@ export const DELINQUENCY_REASON_CONFIG: Record<DelinquencyReason, { label: strin
   nao_recebeu_chip: { label: 'Não recebeu o chip', color: 'bg-pink-500/10 text-pink-600 border-pink-500/20' },
   nao_ativado_streaming: { label: 'Não ativado - Streaming', color: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20' },
   nao_gerou_boleto: { label: 'Não gerou boleto', color: 'bg-teal-500/10 text-teal-600 border-teal-500/20' },
+  cliente_nao_responde: { label: 'Cliente não responde', color: 'bg-slate-500/10 text-slate-600 border-slate-500/20' },
 };
 
 // Channel configurations - matching Supabase enum
