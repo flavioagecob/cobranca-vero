@@ -165,7 +165,7 @@ export function CustomerDetailDialog({ customerId, open, onOpenChange }: Custome
 
                 {/* Sales & Contracts Tabs */}
                 <Card className="lg:col-span-2">
-                  <Tabs defaultValue="sales" className="w-full">
+                  <Tabs defaultValue={customer.operator_contracts && customer.operator_contracts.length > 0 ? "contracts" : "sales"} className="w-full">
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-base">Histórico</CardTitle>
@@ -231,8 +231,7 @@ export function CustomerDetailDialog({ customerId, open, onOpenChange }: Custome
                                   <TableHead>Valor</TableHead>
                                   <TableHead>Vencimento</TableHead>
                                   <TableHead>Pagamento</TableHead>
-                                  <TableHead>Ações</TableHead>
-                                </TableRow>
+                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {customer.operator_contracts.map((contract) => {
@@ -247,19 +246,65 @@ export function CustomerDetailDialog({ customerId, open, onOpenChange }: Custome
                                       <TableCell className="text-sm">{contract.mes_safra_cadastro || '-'}</TableCell>
                                       <TableCell className="font-mono text-sm">{contract.numero_fatura || '-'}</TableCell>
                                       <TableCell>
-                                        <div className="flex items-center gap-1 flex-wrap">
-                                          {(contract as any).pago_pela_empresa && (
-                                            <Badge className="bg-violet-500/10 text-violet-600 border-violet-500/20">
-                                              <Building className="h-3 w-3 mr-1" />
-                                              Pago pela Empresa
-                                            </Badge>
-                                          )}
-                                          {isPaid ? (
-                                            <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">PAGO</Badge>
-                                          ) : isOverdue ? (
-                                            <Badge variant="destructive">VENCIDO</Badge>
-                                          ) : (
-                                            <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/20">PENDENTE</Badge>
+                                        <div className="flex flex-col items-start gap-1">
+                                          <div className="flex items-center gap-1 flex-wrap">
+                                            {(contract as any).pago_pela_empresa && (
+                                              <Badge className="bg-violet-500/10 text-violet-600 border-violet-500/20">
+                                                <Building className="h-3 w-3 mr-1" />
+                                                Pago pela Empresa
+                                              </Badge>
+                                            )}
+                                            {isPaid ? (
+                                              <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">PAGO</Badge>
+                                            ) : isOverdue ? (
+                                              <Badge variant="destructive">VENCIDO</Badge>
+                                            ) : (
+                                              <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/20">PENDENTE</Badge>
+                                            )}
+                                          </div>
+                                          {!(contract as any).pago_pela_empresa && (
+                                            <AlertDialog>
+                                              <AlertDialogTrigger asChild>
+                                                <Button variant="outline" size="sm" className="text-xs mt-1">
+                                                  <Building className="h-3 w-3 mr-1" />
+                                                  Pago Empresa
+                                                </Button>
+                                              </AlertDialogTrigger>
+                                              <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                  <AlertDialogTitle>Confirmar marcação</AlertDialogTitle>
+                                                  <AlertDialogDescription>
+                                                    Deseja marcar esta fatura como "Pago pela Empresa"? Esta ação é permanente e não será afetada por reimportações.
+                                                    <br /><br />
+                                                    <strong>Contrato:</strong> {contract.id_contrato}<br />
+                                                    <strong>Fatura:</strong> {contract.numero_fatura || '-'}<br />
+                                                    <strong>Valor:</strong> {formatCurrency(contract.valor_fatura || contract.valor_contrato)}
+                                                  </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                  <AlertDialogAction onClick={async () => {
+                                                    try {
+                                                      const { error } = await supabase
+                                                        .from('operator_contracts')
+                                                        .update({
+                                                          pago_pela_empresa: true,
+                                                          pago_pela_empresa_at: new Date().toISOString(),
+                                                          pago_pela_empresa_by: user?.id,
+                                                        } as any)
+                                                        .eq('id', contract.id);
+                                                      if (error) throw error;
+                                                      toast.success('Fatura marcada como "Pago pela Empresa"');
+                                                      refetch?.();
+                                                    } catch (err) {
+                                                      toast.error('Erro ao marcar fatura');
+                                                    }
+                                                  }}>
+                                                    Confirmar
+                                                  </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                              </AlertDialogContent>
+                                            </AlertDialog>
                                           )}
                                         </div>
                                       </TableCell>
@@ -274,52 +319,6 @@ export function CustomerDetailDialog({ customerId, open, onOpenChange }: Custome
                                           <span className="text-emerald-600 font-medium">{formatDate(contract.data_pagamento)}</span>
                                         ) : (
                                           <span className="text-muted-foreground">-</span>
-                                        )}
-                                      </TableCell>
-                                      <TableCell>
-                                        {!(contract as any).pago_pela_empresa && (
-                                          <AlertDialog>
-                                            <AlertDialogTrigger asChild>
-                                              <Button variant="outline" size="sm" className="text-xs">
-                                                <Building className="h-3 w-3 mr-1" />
-                                                Pago Empresa
-                                              </Button>
-                                            </AlertDialogTrigger>
-                                            <AlertDialogContent>
-                                              <AlertDialogHeader>
-                                                <AlertDialogTitle>Confirmar marcação</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                  Deseja marcar esta fatura como "Pago pela Empresa"? Esta ação é permanente e não será afetada por reimportações.
-                                                  <br /><br />
-                                                  <strong>Contrato:</strong> {contract.id_contrato}<br />
-                                                  <strong>Fatura:</strong> {contract.numero_fatura || '-'}<br />
-                                                  <strong>Valor:</strong> {formatCurrency(contract.valor_fatura || contract.valor_contrato)}
-                                                </AlertDialogDescription>
-                                              </AlertDialogHeader>
-                                              <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                <AlertDialogAction onClick={async () => {
-                                                  try {
-                                                    const { error } = await supabase
-                                                      .from('operator_contracts')
-                                                      .update({
-                                                        pago_pela_empresa: true,
-                                                        pago_pela_empresa_at: new Date().toISOString(),
-                                                        pago_pela_empresa_by: user?.id,
-                                                      } as any)
-                                                      .eq('id', contract.id);
-                                                    if (error) throw error;
-                                                    toast.success('Fatura marcada como "Pago pela Empresa"');
-                                                    refetch?.();
-                                                  } catch (err) {
-                                                    toast.error('Erro ao marcar fatura');
-                                                  }
-                                                }}>
-                                                  Confirmar
-                                                </AlertDialogAction>
-                                              </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                          </AlertDialog>
                                         )}
                                       </TableCell>
                                     </TableRow>
