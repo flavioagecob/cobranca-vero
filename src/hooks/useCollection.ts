@@ -43,6 +43,7 @@ interface UseCollectionReturn {
   refreshHistory: () => Promise<void>;
   nextCustomer: () => void;
   previousCustomer: () => void;
+  markAsPaidByCompany: (contractId: string) => Promise<void>;
 }
 
 // Aligned with Supabase table structure
@@ -529,6 +530,24 @@ export const useCollection = (): UseCollectionReturn => {
     }
   }, [selectedCustomer, fetchAttempts, fetchPromises]);
 
+  const markAsPaidByCompany = useCallback(async (contractId: string) => {
+    if (!user) throw new Error('Usuário não autenticado');
+
+    const { error } = await supabase
+      .from('operator_contracts')
+      .update({
+        pago_pela_empresa: true,
+        pago_pela_empresa_at: new Date().toISOString(),
+        pago_pela_empresa_by: user.id,
+      } as any)
+      .eq('id', contractId);
+
+    if (error) throw error;
+
+    // Refresh queue to reflect changes
+    await fetchQueue();
+  }, [user, fetchQueue]);
+
   return {
     queue,
     selectedCustomer,
@@ -549,5 +568,6 @@ export const useCollection = (): UseCollectionReturn => {
     refreshHistory,
     nextCustomer,
     previousCustomer,
+    markAsPaidByCompany,
   };
 };

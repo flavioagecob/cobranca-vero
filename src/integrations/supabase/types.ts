@@ -297,6 +297,9 @@ export type Database = {
           mes_safra_vencimento: string | null
           numero_contrato_operadora: string | null
           numero_fatura: string | null
+          pago_pela_empresa: boolean
+          pago_pela_empresa_at: string | null
+          pago_pela_empresa_by: string | null
           raw_data: Json | null
           sales_base_id: string | null
           status_contrato: string | null
@@ -319,6 +322,9 @@ export type Database = {
           mes_safra_vencimento?: string | null
           numero_contrato_operadora?: string | null
           numero_fatura?: string | null
+          pago_pela_empresa?: boolean
+          pago_pela_empresa_at?: string | null
+          pago_pela_empresa_by?: string | null
           raw_data?: Json | null
           sales_base_id?: string | null
           status_contrato?: string | null
@@ -341,6 +347,9 @@ export type Database = {
           mes_safra_vencimento?: string | null
           numero_contrato_operadora?: string | null
           numero_fatura?: string | null
+          pago_pela_empresa?: boolean
+          pago_pela_empresa_at?: string | null
+          pago_pela_empresa_by?: string | null
           raw_data?: Json | null
           sales_base_id?: string | null
           status_contrato?: string | null
