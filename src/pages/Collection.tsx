@@ -144,7 +144,7 @@ export default function Collection() {
       {/* Main Content */}
       <div className="grid gap-4 lg:grid-cols-12 h-[calc(100vh-300px)]">
         {/* Queue Sidebar */}
-        <div className="lg:col-span-3 h-full">
+        <div className="lg:col-span-3 h-[calc(100vh-300px)] overflow-hidden">
           <CollectionQueue
             queue={queue}
             selectedCustomerId={selectedCustomer?.customer_id || null}
@@ -154,7 +154,7 @@ export default function Collection() {
         </div>
 
         {/* Main Panel */}
-        <div className="lg:col-span-9 space-y-4 overflow-y-auto">
+        <div className="lg:col-span-9 space-y-4">
           {selectedCustomer ? (
             <>
               {/* Navigation */}
@@ -176,10 +176,7 @@ export default function Collection() {
               <div className="grid gap-4 md:grid-cols-2">
                 {/* Left Column */}
                 <div className="space-y-4">
-                  <CustomerInfoCard 
-                    customer={selectedCustomer} 
-                    onStartAttempt={handleStartAttempt}
-                  />
+                  <CustomerInfoCard customer={selectedCustomer} />
 
                   {showAttemptForm ? (
                     <AttemptForm
