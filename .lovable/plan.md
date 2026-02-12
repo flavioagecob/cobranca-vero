@@ -1,39 +1,69 @@
 
-# Adicionar OS (Numero do Contrato) na Exportacao de Faturas
 
-## Objetivo
+# Correcao: Limite de 1000 linhas do Supabase nas Faturas
 
-Incluir o campo **OS** (ordem de servico da base de vendas) nos dados de faturas, tanto na tabela visivel quanto na exportacao Excel. Isso permitira o cruzamento dos dados exportados com a base de vendas importada.
+## Problema identificado
 
-## Como funciona hoje
+O banco possui **1.847 contratos**, mas o Supabase retorna no maximo **1.000 linhas por consulta** sem aviso. Isso causa:
+- Total de Faturas mostrando 237 em vez de 335
+- Atrasadas mostrando 32 em vez de 129
+- Stats calculados sobre dados incompletos
 
-A query de faturas busca dados de `operator_contracts` e faz join com `customers`, mas nao inclui o join com `sales_base`. O campo `sales_base_id` existe em `operator_contracts` e a tabela `sales_base` contem o campo `os`.
+## Solucao
 
-## Alteracoes
+Criar uma funcao RPC no banco para calcular as estatisticas e implementar busca paginada para a listagem.
 
-### 1. `src/hooks/useInvoices.ts`
-- Adicionar o join com `sales_base` na query Supabase: `sales_base:sales_base_id(os)`
-- Mapear o campo `os` da sales_base no objeto Invoice processado
+### 1. Criar funcao RPC para estatisticas
 
-### 2. `src/types/invoice.ts`
-- Adicionar o campo `os` (string | null) na interface `Invoice`
+Criar uma migration SQL com funcao `get_invoice_stats` que recebe os filtros (safra, parcela, overdue_range) e retorna as contagens e somas diretamente no banco, sem limite de linhas.
 
-### 3. `src/pages/Invoices.tsx`
-- Adicionar a coluna **OS** no mapeamento de exportacao Excel, antes de "Cliente"
+### 2. Criar funcao RPC para opcoes de filtro
 
-### 4. `src/components/invoices/InvoiceTable.tsx`
-- Adicionar a coluna **OS** na tabela visivel (opcional, mas recomendado para consistencia)
+Criar funcao `get_invoice_filter_options` que retorna safras e parcelas unicas usando `SELECT DISTINCT`, evitando buscar todos os registros.
+
+### 3. Atualizar `src/hooks/useInvoices.ts`
+
+- Substituir a query de stats por chamada RPC: `supabase.rpc('get_invoice_stats', { ... })`
+- Substituir a query de opcoes de filtro por chamada RPC
+- Implementar busca em lotes (batches de 1000) para a query principal de listagem, garantindo que todos os registros filtrados sejam retornados
+- Manter a paginacao client-side para exibicao na tabela
+
+### 4. Atualizar `src/hooks/useCollection.ts`
+
+- A query de `fetchFilterOptions` tambem busca todos os contratos sem paginacao - aplicar a mesma correcao com RPC ou DISTINCT
 
 ## Detalhes tecnicos
 
-A query Supabase sera atualizada de:
-```
-customer:customers(id, nome, cpf_cnpj, telefone, email)
-```
-Para:
-```
-customer:customers(id, nome, cpf_cnpj, telefone, email),
-sales_base:sales_base_id(os)
+### Funcao RPC (SQL)
+
+```text
+CREATE OR REPLACE FUNCTION get_invoice_stats(
+  p_safra text DEFAULT NULL,
+  p_parcela text DEFAULT NULL
+)
+RETURNS json AS $$
+  SELECT json_build_object(
+    'total', count(*),
+    'pendente', count(*) FILTER (WHERE data_pagamento IS NULL AND data_vencimento >= CURRENT_DATE),
+    'atrasado', count(*) FILTER (WHERE data_pagamento IS NULL AND data_vencimento < CURRENT_DATE),
+    'pago', count(*) FILTER (WHERE data_pagamento IS NOT NULL),
+    'valor_total', COALESCE(sum(valor_fatura), 0),
+    'valor_pendente', COALESCE(sum(valor_fatura) FILTER (WHERE data_pagamento IS NULL), 0),
+    'valor_atrasado', COALESCE(sum(valor_fatura) FILTER (WHERE data_pagamento IS NULL AND data_vencimento < CURRENT_DATE), 0)
+  )
+  FROM operator_contracts
+  WHERE (p_safra IS NULL OR mes_safra_cadastro = p_safra)
+    AND (p_parcela IS NULL OR numero_fatura = p_parcela);
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
 ```
 
-O campo `os` sera extraido do resultado do join e mapeado para `invoice.os`. Na exportacao, aparecera como coluna "OS" no arquivo Excel.
+### Busca em lotes (TypeScript)
+
+A listagem principal usara uma funcao que busca em lotes de 1000 registros usando `.range()` ate nao haver mais dados, garantindo que todos os registros filtrados sejam retornados para exibicao e exportacao.
+
+### Arquivos modificados
+
+- Nova migration SQL (funcoes RPC + grant de permissoes)
+- `src/hooks/useInvoices.ts` (usar RPC para stats, busca em lotes para listagem)
+- `src/hooks/useCollection.ts` (corrigir fetchFilterOptions)
+
