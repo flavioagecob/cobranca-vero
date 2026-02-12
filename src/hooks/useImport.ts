@@ -301,6 +301,8 @@ export const useImport = (): UseImportReturn => {
             }
 
             // Build contract data
+            // IMPORTANTE: NÃO incluir pago_pela_empresa, pago_pela_empresa_at, pago_pela_empresa_by
+            // Esses campos são gerenciados manualmente e NÃO devem ser sobrescritos pela reimportação
             const contractData = {
               customer_id: salesRecord.customer_id,
               sales_base_id: salesRecord.id,

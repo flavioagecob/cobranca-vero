@@ -47,6 +47,9 @@ export interface OperatorContract {
   import_batch_id: string | null;
   raw_data: unknown;
   created_at: string | null;
+  pago_pela_empresa: boolean;
+  pago_pela_empresa_at: string | null;
+  pago_pela_empresa_by: string | null;
 }
 
 export interface CustomerWithDetails extends Customer {
