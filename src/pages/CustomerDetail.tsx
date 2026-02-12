@@ -51,6 +51,7 @@ export default function CustomerDetail() {
     channel: a.channel as CollectionAttempt['channel'],
     status: a.status as CollectionAttempt['status'],
     notes: a.notes,
+    delinquency_reason: (a as any).delinquency_reason || null,
     created_at: a.created_at || new Date().toISOString(),
   }));
 

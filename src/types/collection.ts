@@ -1,6 +1,18 @@
 // Channel types - matching Supabase enum collection_channel
 export type AttemptChannel = 'whatsapp' | 'telefone' | 'email' | 'sms';
 
+// Delinquency reason types - matching Supabase enum delinquency_reason
+export type DelinquencyReason =
+  | 'cliente_nao_contratou'
+  | 'desconhece_divida'
+  | 'valor_errado'
+  | 'fraude'
+  | 'nao_recebeu_boleto'
+  | 'internet_sem_funcionar'
+  | 'nao_recebeu_chip'
+  | 'nao_ativado_streaming'
+  | 'nao_gerou_boleto';
+
 // Status types - matching Supabase enum attempt_status
 export type AttemptResult = 'sucesso' | 'sem_resposta' | 'numero_invalido' | 'recusado' | 'caixa_postal';
 
@@ -16,6 +28,7 @@ export interface CollectionAttempt {
   channel: AttemptChannel;
   status: AttemptResult;
   notes: string | null;
+  delinquency_reason: DelinquencyReason | null;
   created_at: string;
 }
 
@@ -57,6 +70,19 @@ export interface MessageTemplate {
   variaveis: string[];
   ativo: boolean;
 }
+
+// Delinquency reason configurations
+export const DELINQUENCY_REASON_CONFIG: Record<DelinquencyReason, { label: string; color: string }> = {
+  cliente_nao_contratou: { label: 'Cliente não contratou', color: 'bg-red-500/10 text-red-600 border-red-500/20' },
+  desconhece_divida: { label: 'Desconhece dívida', color: 'bg-orange-500/10 text-orange-600 border-orange-500/20' },
+  valor_errado: { label: 'Valor errado', color: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
+  fraude: { label: 'Fraude', color: 'bg-destructive/10 text-destructive border-destructive/20' },
+  nao_recebeu_boleto: { label: 'Não recebeu boleto', color: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
+  internet_sem_funcionar: { label: 'Internet sem funcionar', color: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
+  nao_recebeu_chip: { label: 'Não recebeu o chip', color: 'bg-pink-500/10 text-pink-600 border-pink-500/20' },
+  nao_ativado_streaming: { label: 'Não ativado - Streaming', color: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20' },
+  nao_gerou_boleto: { label: 'Não gerou boleto', color: 'bg-teal-500/10 text-teal-600 border-teal-500/20' },
+};
 
 // Channel configurations - matching Supabase enum
 export const CHANNEL_CONFIG: Record<AttemptChannel, { label: string; icon: string; color: string }> = {

@@ -56,6 +56,9 @@ export type Database = {
           collector_id: string
           created_at: string | null
           customer_id: string
+          delinquency_reason:
+            | Database["public"]["Enums"]["delinquency_reason"]
+            | null
           id: string
           invoice_id: string
           notes: string | null
@@ -66,6 +69,9 @@ export type Database = {
           collector_id: string
           created_at?: string | null
           customer_id: string
+          delinquency_reason?:
+            | Database["public"]["Enums"]["delinquency_reason"]
+            | null
           id?: string
           invoice_id: string
           notes?: string | null
@@ -76,6 +82,9 @@ export type Database = {
           collector_id?: string
           created_at?: string | null
           customer_id?: string
+          delinquency_reason?:
+            | Database["public"]["Enums"]["delinquency_reason"]
+            | null
           id?: string
           invoice_id?: string
           notes?: string | null
@@ -613,6 +622,16 @@ export type Database = {
         | "caixa_postal"
       collection_channel: "whatsapp" | "telefone" | "email" | "sms"
       customer_status: "ativo" | "inadimplente" | "cancelado" | "suspenso"
+      delinquency_reason:
+        | "cliente_nao_contratou"
+        | "desconhece_divida"
+        | "valor_errado"
+        | "fraude"
+        | "nao_recebeu_boleto"
+        | "internet_sem_funcionar"
+        | "nao_recebeu_chip"
+        | "nao_ativado_streaming"
+        | "nao_gerou_boleto"
       import_type: "sales" | "operator" | "preventive"
       invoice_status:
         | "pendente"
@@ -764,6 +783,17 @@ export const Constants = {
       ],
       collection_channel: ["whatsapp", "telefone", "email", "sms"],
       customer_status: ["ativo", "inadimplente", "cancelado", "suspenso"],
+      delinquency_reason: [
+        "cliente_nao_contratou",
+        "desconhece_divida",
+        "valor_errado",
+        "fraude",
+        "nao_recebeu_boleto",
+        "internet_sem_funcionar",
+        "nao_recebeu_chip",
+        "nao_ativado_streaming",
+        "nao_gerou_boleto",
+      ],
       import_type: ["sales", "operator", "preventive"],
       invoice_status: [
         "pendente",

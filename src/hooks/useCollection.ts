@@ -7,6 +7,7 @@ import type {
   CollectionQueueItem,
   AttemptChannel,
   AttemptResult,
+  DelinquencyReason,
   PromiseStatus
 } from '@/types/collection';
 
@@ -51,6 +52,7 @@ interface NewAttempt {
   channel: AttemptChannel;
   status: AttemptResult;
   notes?: string;
+  delinquency_reason?: DelinquencyReason;
 }
 
 interface NewPromise {
@@ -403,6 +405,7 @@ export const useCollection = (): UseCollectionReturn => {
       channel: data.channel,
       status: data.status,
       notes: data.notes || null,
+      delinquency_reason: data.delinquency_reason || null,
       created_at: new Date().toISOString(),
     };
 
@@ -416,7 +419,8 @@ export const useCollection = (): UseCollectionReturn => {
           channel: newAttempt.channel,
           status: newAttempt.status,
           notes: newAttempt.notes,
-        });
+          delinquency_reason: newAttempt.delinquency_reason,
+        } as any);
 
       if (error) {
         console.error('Supabase insert error:', error);
