@@ -1,33 +1,22 @@
 
 
-# Corrigir visibilidade do botão "Pago pela Empresa"
+# Ajustes na tela de Cobranca
 
-## Problema identificado
+## 1. Scroll independente na fila (como na Preventiva)
 
-O botão "Pago Empresa" atualmente so aparece dentro da aba **Contratos** na tabela de contratos, na ultima coluna "Acoes". Isso causa dois problemas:
+A fila da Cobranca Preventiva possui scroll independente porque o container da fila usa `h-[calc(100vh-300px)] overflow-hidden`, enquanto o painel principal nao tem `overflow-y-auto`. Na Cobranca atual, o container da fila usa apenas `h-full` e o painel principal tem `overflow-y-auto`, o que faz a pagina inteira rolar.
 
-1. O usuario precisa clicar na aba "Contratos" para ver o botao - nao e visivel na aba "Vendas" que e a aba padrao
-2. A tabela de contratos tem muitas colunas (8 colunas incluindo Acoes), e em telas menores a coluna "Acoes" pode ficar fora da area visivel, exigindo scroll horizontal
+**Alteracao em `src/pages/Collection.tsx`:**
+- Linha 147: trocar `h-full` por `h-[calc(100vh-300px)] overflow-hidden` no container da fila
+- Linha 157: remover `overflow-y-auto` do painel principal, deixando o scroll global para o conteudo de detalhes
 
-## Solucao proposta
+## 2. Remover Acoes Rapidas do card do cliente
 
-### 1. Tornar a aba "Contratos" a aba padrao quando existirem contratos
+**Alteracao em `src/components/collection/CustomerInfoCard.tsx`:**
+- Remover o bloco "Acoes Rapidas" (linhas 146-193): os botoes Ligar, WhatsApp e E-mail
+- Remover o `Separator` que antecede as acoes (linha 145)
+- Remover a prop `onStartAttempt` da interface, ja que nao sera mais usada neste componente
 
-Alterar o `defaultValue` do Tabs de `"sales"` para `"contracts"` quando o cliente tiver contratos, para que o botao "Pago Empresa" fique imediatamente visivel ao abrir o dialog.
-
-### 2. Melhorar a visibilidade do botao na tabela
-
-- Garantir que o botao "Pago Empresa" fique mais acessivel, movendo-o para ser renderizado junto ao Status (coluna "Status") ao inves de numa coluna separada "Acoes", reduzindo o numero de colunas e evitando que fique escondido pelo scroll horizontal.
-
-### Detalhes tecnicos
-
-**Arquivo: `src/components/shared/CustomerDetailDialog.tsx`**
-- Mover o botao "Pago Empresa" da coluna "Acoes" para dentro da coluna "Status", abaixo dos badges de status existentes
-- Remover a coluna "Acoes" separada para simplificar a tabela
-- Isso garante que o botao fique visivel sem necessidade de scroll horizontal
-
-**Arquivo: `src/pages/CustomerDetail.tsx`**
-- Aplicar a mesma mudanca na pagina completa do cliente, movendo o botao para a coluna de Status
-
-Ambos os arquivos serao atualizados de forma consistente.
+**Alteracao em `src/pages/Collection.tsx`:**
+- Remover a prop `onStartAttempt` passada ao `CustomerInfoCard` (linha 181)
 
