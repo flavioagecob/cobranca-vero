@@ -7,10 +7,12 @@ import {
   Calendar, 
   FileText, 
   Building2,
+  Building,
   User,
   Copy,
   ExternalLink
 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -35,12 +37,15 @@ import {
   getStatusColor 
 } from '@/lib/formatters';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import type { CollectionAttempt, PaymentPromise } from '@/types/collection';
 
 export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { customer, attempts, promises, isLoading, error } = useCustomerDetail(id);
+  const { user } = useAuth();
+  const { customer, attempts, promises, isLoading, error, refetch } = useCustomerDetail(id);
 
   // Map DB records to the expected types for HistoryTimeline
   const mappedAttempts: CollectionAttempt[] = attempts.map(a => ({
@@ -319,6 +324,7 @@ export default function CustomerDetail() {
                           <TableHead>Valor Fatura</TableHead>
                           <TableHead>Vencimento</TableHead>
                           <TableHead>Pagamento</TableHead>
+                          <TableHead>Ações</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -343,19 +349,27 @@ export default function CustomerDetail() {
                                 {contract.numero_fatura || '-'}
                               </TableCell>
                               <TableCell>
-                                {isPaid ? (
-                                  <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-                                    PAGO
-                                  </Badge>
-                                ) : isOverdue ? (
-                                  <Badge variant="destructive">
-                                    VENCIDO
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/20">
-                                    PENDENTE
-                                  </Badge>
-                                )}
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {(contract as any).pago_pela_empresa && (
+                                    <Badge className="bg-violet-500/10 text-violet-600 border-violet-500/20">
+                                      <Building className="h-3 w-3 mr-1" />
+                                      Pago pela Empresa
+                                    </Badge>
+                                  )}
+                                  {isPaid ? (
+                                    <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                                      PAGO
+                                    </Badge>
+                                  ) : isOverdue ? (
+                                    <Badge variant="destructive">
+                                      VENCIDO
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/20">
+                                      PENDENTE
+                                    </Badge>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell className={isOverdue ? 'font-medium text-destructive' : ''}>
                                 {formatCurrency(contract.valor_fatura || contract.valor_contrato)}
@@ -370,6 +384,52 @@ export default function CustomerDetail() {
                                   </span>
                                 ) : (
                                   <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {!(contract as any).pago_pela_empresa && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button variant="outline" size="sm" className="text-xs">
+                                        <Building className="h-3 w-3 mr-1" />
+                                        Pago Empresa
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Confirmar marcação</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Deseja marcar esta fatura como "Pago pela Empresa"? Esta ação é permanente e não será afetada por reimportações.
+                                          <br /><br />
+                                          <strong>Contrato:</strong> {contract.id_contrato}<br />
+                                          <strong>Fatura:</strong> {contract.numero_fatura || '-'}<br />
+                                          <strong>Valor:</strong> {formatCurrency(contract.valor_fatura || contract.valor_contrato)}
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction onClick={async () => {
+                                          try {
+                                            const { error } = await supabase
+                                              .from('operator_contracts')
+                                              .update({
+                                                pago_pela_empresa: true,
+                                                pago_pela_empresa_at: new Date().toISOString(),
+                                                pago_pela_empresa_by: user?.id,
+                                              } as any)
+                                              .eq('id', contract.id);
+                                            if (error) throw error;
+                                            toast.success('Fatura marcada como "Pago pela Empresa"');
+                                            refetch?.();
+                                          } catch (err) {
+                                            toast.error('Erro ao marcar fatura');
+                                          }
+                                        }}>
+                                          Confirmar
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
                                 )}
                               </TableCell>
                             </TableRow>
