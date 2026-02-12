@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Phone, MessageCircle, Mail, User, Copy, ExternalLink } from 'lucide-react';
+import { Phone, Mail, Copy, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,10 +11,9 @@ import { CustomerDetailDialog } from '@/components/shared/CustomerDetailDialog';
 
 interface CustomerInfoCardProps {
   customer: CollectionQueueItem;
-  onStartAttempt: (channel: 'telefone' | 'whatsapp' | 'email') => void;
 }
 
-export function CustomerInfoCard({ customer, onStartAttempt }: CustomerInfoCardProps) {
+export function CustomerInfoCard({ customer }: CustomerInfoCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -141,56 +140,6 @@ export function CustomerInfoCard({ customer, onStartAttempt }: CustomerInfoCardP
             Maior atraso: {customer.max_dias_atraso} dias
           </Badge>
         )}
-
-        <Separator />
-
-        {/* Quick Actions */}
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground font-medium">Ações Rápidas</p>
-          <div className="grid grid-cols-3 gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-col h-auto py-3"
-              disabled={!phoneLink}
-              onClick={() => {
-                if (phoneLink) window.open(phoneLink);
-                onStartAttempt('telefone');
-              }}
-            >
-              <Phone className="h-5 w-5 mb-1 text-blue-600" />
-              <span className="text-xs">Ligar</span>
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-col h-auto py-3"
-              disabled={!whatsappLink}
-              onClick={() => {
-                if (whatsappLink) window.open(whatsappLink, '_blank');
-                onStartAttempt('whatsapp');
-              }}
-            >
-              <MessageCircle className="h-5 w-5 mb-1 text-emerald-600" />
-              <span className="text-xs">WhatsApp</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-col h-auto py-3"
-              disabled={!emailLink}
-              onClick={() => {
-                if (emailLink) window.open(emailLink);
-                onStartAttempt('email');
-              }}
-            >
-              <Mail className="h-5 w-5 mb-1 text-amber-600" />
-              <span className="text-xs">E-mail</span>
-            </Button>
-          </div>
-        </div>
       </CardContent>
       <CustomerDetailDialog
         customerId={customer.customer_id}
