@@ -7,6 +7,7 @@ import {
   CHANNEL_CONFIG, 
   RESULT_CONFIG, 
   PROMISE_STATUS_CONFIG,
+  DELINQUENCY_REASON_CONFIG,
   type CollectionAttempt, 
   type PaymentPromise 
 } from '@/types/collection';
@@ -106,6 +107,11 @@ function AttemptItem({ attempt }: { attempt: CollectionAttempt }) {
         <Badge variant="outline" className={`mt-1 ${resultConfig?.color || ''}`}>
           {resultConfig?.label || attempt.status}
         </Badge>
+        {attempt.delinquency_reason && DELINQUENCY_REASON_CONFIG[attempt.delinquency_reason] && (
+          <Badge variant="outline" className={`mt-1 ml-1 ${DELINQUENCY_REASON_CONFIG[attempt.delinquency_reason].color}`}>
+            {DELINQUENCY_REASON_CONFIG[attempt.delinquency_reason].label}
+          </Badge>
+        )}
         {attempt.notes && (
           <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
             {attempt.notes}

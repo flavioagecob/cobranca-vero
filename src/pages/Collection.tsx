@@ -61,6 +61,7 @@ export default function Collection() {
         channel: data.channel,
         status: data.status,
         notes: data.notes,
+        delinquency_reason: data.delinquencyReason,
       });
 
       if (data.createPromise && data.promiseData) {

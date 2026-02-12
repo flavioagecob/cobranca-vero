@@ -27,7 +27,7 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { CHANNEL_CONFIG, RESULT_CONFIG, type AttemptChannel, type AttemptResult } from '@/types/collection';
+import { CHANNEL_CONFIG, RESULT_CONFIG, DELINQUENCY_REASON_CONFIG, type AttemptChannel, type AttemptResult, type DelinquencyReason } from '@/types/collection';
 
 interface AttemptFormProps {
   customerId: string;
@@ -41,6 +41,7 @@ interface AttemptFormProps {
 export interface AttemptFormData {
   channel: AttemptChannel;
   status: AttemptResult;
+  delinquencyReason: DelinquencyReason;
   notes: string;
   createPromise: boolean;
   promiseData?: {
@@ -58,6 +59,7 @@ export function AttemptForm({
 }: AttemptFormProps) {
   const [channel, setChannel] = useState<AttemptChannel>(initialChannel);
   const [status, setStatus] = useState<AttemptResult>('sucesso');
+  const [delinquencyReason, setDelinquencyReason] = useState<DelinquencyReason | ''>('');
   const [notes, setNotes] = useState('');
   const [createPromise, setCreatePromise] = useState(false);
   const [valorPrometido, setValorPrometido] = useState('');
@@ -66,9 +68,12 @@ export function AttemptForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!delinquencyReason) return;
+
     const data: AttemptFormData = {
       channel,
       status,
+      delinquencyReason,
       notes,
       createPromise,
     };
@@ -122,6 +127,23 @@ export function AttemptForm({
               </SelectTrigger>
               <SelectContent>
                 {Object.entries(RESULT_CONFIG).map(([key, config]) => (
+                  <SelectItem key={key} value={key}>
+                    {config.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Motivo da Inadimplência */}
+          <div className="space-y-2">
+            <Label>Motivo da Inadimplência <span className="text-destructive">*</span></Label>
+            <Select value={delinquencyReason} onValueChange={(v) => setDelinquencyReason(v as DelinquencyReason)}>
+              <SelectTrigger className={cn(!delinquencyReason && "text-muted-foreground")}>
+                <SelectValue placeholder="Selecione o motivo" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(DELINQUENCY_REASON_CONFIG).map(([key, config]) => (
                   <SelectItem key={key} value={key}>
                     {config.label}
                   </SelectItem>
@@ -200,7 +222,7 @@ export function AttemptForm({
             <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
               Cancelar
             </Button>
-            <Button type="submit" disabled={isLoading} className="flex-1">
+            <Button type="submit" disabled={isLoading || !delinquencyReason} className="flex-1">
               {isLoading ? 'Salvando...' : 'Registrar'}
             </Button>
           </div>
