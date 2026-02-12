@@ -1,22 +1,53 @@
 
 
-# Ajustes na tela de Cobranca
+# Corrigir tela branca no Login apos limpar cache
 
-## 1. Scroll independente na fila (como na Preventiva)
+## Problema
 
-A fila da Cobranca Preventiva possui scroll independente porque o container da fila usa `h-[calc(100vh-300px)] overflow-hidden`, enquanto o painel principal nao tem `overflow-y-auto`. Na Cobranca atual, o container da fila usa apenas `h-full` e o painel principal tem `overflow-y-auto`, o que faz a pagina inteira rolar.
+Apos limpar o cache do navegador, o sistema exibe uma tela branca na URL `/login`. Isso geralmente acontece porque:
 
-**Alteracao em `src/pages/Collection.tsx`:**
-- Linha 147: trocar `h-full` por `h-[calc(100vh-300px)] overflow-hidden` no container da fila
-- Linha 157: remover `overflow-y-auto` do painel principal, deixando o scroll global para o conteudo de detalhes
+1. **Assets antigos em cache** - O navegador pode manter versoes antigas dos arquivos JavaScript/CSS em cache do Service Worker ou cache HTTP, causando conflito com a versao atual
+2. **Erros nao tratados** - Se qualquer erro JavaScript ocorre durante a renderizacao, o React "morre" silenciosamente e mostra tela branca
 
-## 2. Remover Acoes Rapidas do card do cliente
+## Solucao
 
-**Alteracao em `src/components/collection/CustomerInfoCard.tsx`:**
-- Remover o bloco "Acoes Rapidas" (linhas 146-193): os botoes Ligar, WhatsApp e E-mail
-- Remover o `Separator` que antecede as acoes (linha 145)
-- Remover a prop `onStartAttempt` da interface, ja que nao sera mais usada neste componente
+### 1. Adicionar Error Boundary global
 
-**Alteracao em `src/pages/Collection.tsx`:**
-- Remover a prop `onStartAttempt` passada ao `CustomerInfoCard` (linha 181)
+Criar um componente `ErrorBoundary` que captura erros de renderizacao do React e exibe uma mensagem amigavel com botao para recarregar, em vez de mostrar tela branca.
+
+**Novo arquivo: `src/components/ErrorBoundary.tsx`**
+
+### 2. Adicionar tratamento de erros asincronos
+
+No `App.tsx`, adicionar um listener global para `unhandledrejection` que captura promises rejeitadas (ex: falha na conexao com Supabase) e evita que o app quebre silenciosamente.
+
+### 3. Adicionar meta tags anti-cache no `index.html`
+
+Incluir headers HTTP via meta tags para garantir que o navegador sempre busque a versao mais recente dos arquivos:
+
+```text
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+```
+
+### 4. Envolver o App com o ErrorBoundary
+
+No `src/main.tsx`, envolver o componente `App` com o `ErrorBoundary` para que qualquer erro seja capturado e exiba uma tela de recuperacao em vez de tela branca.
+
+## Detalhes tecnicos
+
+**`src/components/ErrorBoundary.tsx`** (novo arquivo)
+- Componente de classe React que implementa `componentDidCatch` e `getDerivedStateFromError`
+- Quando um erro e capturado, exibe uma tela com mensagem "Ocorreu um erro" e um botao "Recarregar Sistema"
+- O botao limpa o localStorage, sessionStorage e caches do navegador antes de recarregar
+
+**`src/main.tsx`**
+- Importar e envolver `<App />` com `<ErrorBoundary>`
+
+**`src/App.tsx`**
+- Adicionar `useEffect` com listener para `unhandledrejection` como rede de seguranca
+
+**`index.html`**
+- Adicionar meta tags anti-cache no `<head>`
 
