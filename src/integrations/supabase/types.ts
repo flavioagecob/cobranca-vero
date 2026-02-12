@@ -590,6 +590,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_invoice_filter_options: { Args: never; Returns: Json }
+      get_invoice_stats: {
+        Args: { p_parcela?: string; p_safra?: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

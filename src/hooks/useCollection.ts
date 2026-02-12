@@ -98,18 +98,15 @@ export const useCollection = (): UseCollectionReturn => {
   // Ref to preserve selected customer ID during refresh
   const selectedCustomerIdRef = useRef<string | null>(null);
 
-  // Fetch filter options
+  // Fetch filter options via RPC (bypasses 1000 row limit)
   const fetchFilterOptions = useCallback(async () => {
     try {
-      const { data: contracts } = await supabase
-        .from('operator_contracts')
-        .select('mes_safra_cadastro, numero_fatura');
-      
-      if (contracts) {
-        const safras = [...new Set(contracts.map(c => c.mes_safra_cadastro).filter(Boolean))] as string[];
-        const parcelas = [...new Set(contracts.map(c => c.numero_fatura).filter(Boolean))] as string[];
-        setSafraOptions(safras.sort().reverse());
-        setParcelaOptions(parcelas.sort());
+      const { data, error } = await supabase.rpc('get_invoice_filter_options');
+      if (error) throw error;
+      if (data) {
+        const options = data as { safras: string[]; parcelas: string[] };
+        setSafraOptions((options.safras || []).sort().reverse());
+        setParcelaOptions((options.parcelas || []).sort());
       }
     } catch (err) {
       console.error('Error fetching filter options:', err);
@@ -130,7 +127,7 @@ export const useCollection = (): UseCollectionReturn => {
       todayStart.setHours(0, 0, 0, 0);
       
       // Build query for overdue contracts (unpaid and past due date)
-      let query = supabase
+      let baseQuery = supabase
         .from('operator_contracts')
         .select(`
           id,
@@ -149,22 +146,38 @@ export const useCollection = (): UseCollectionReturn => {
       
       // Apply filters
       if (filters.safra !== 'all') {
-        query = query.eq('mes_safra_cadastro', filters.safra);
+        baseQuery = baseQuery.eq('mes_safra_cadastro', filters.safra);
       }
       if (filters.parcela !== 'all') {
-        query = query.eq('numero_fatura', filters.parcela);
+        baseQuery = baseQuery.eq('numero_fatura', filters.parcela);
       }
 
+      // Fetch ALL contracts in batches (bypasses 1000 row limit)
+      const fetchAllBatches = async (query: any) => {
+        let allData: any[] = [];
+        let from = 0;
+        const batchSize = 1000;
+        while (true) {
+          const { data, error } = await query.range(from, from + batchSize - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          allData = [...allData, ...data];
+          if (data.length < batchSize) break;
+          from += batchSize;
+        }
+        return allData;
+      };
+
       // Fetch contracts and attempts in parallel
-      const [contractsResult, attemptsResult] = await Promise.all([
-        query,
+      const [contractsData, attemptsResult] = await Promise.all([
+        fetchAllBatches(baseQuery),
         supabase
           .from('collection_attempts')
           .select('customer_id, created_at')
           .order('created_at', { ascending: false })
       ]);
 
-      if (contractsResult.error) throw contractsResult.error;
+      if (!contractsData) throw new Error('Failed to fetch contracts');
 
       // Build attempt map for fast lookup
       const attemptMap = new Map<string, string>();
@@ -185,7 +198,7 @@ export const useCollection = (): UseCollectionReturn => {
       const customerMap = new Map<string, CollectionQueueItem>();
       let valorTotalPendente = 0;
 
-      contractsResult.data?.forEach((contract) => {
+      contractsData.forEach((contract: any) => {
         const customer = contract.customers as unknown as {
           id: string;
           nome: string;
