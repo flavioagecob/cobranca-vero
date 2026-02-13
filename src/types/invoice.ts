@@ -23,6 +23,10 @@ export interface Invoice {
   mes_safra_cadastro: string | null;
   os: string | null;
   observacoes: string | null;
+  pago_pela_empresa: boolean;
+  marcado_pago_by: string | null;
+  marcado_pago_at: string | null;
+  marcado_pago_by_name: string | null;
   created_at: string;
   updated_at: string;
   // Joined data

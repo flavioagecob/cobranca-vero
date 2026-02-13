@@ -198,9 +198,16 @@ export function InvoiceTable({ invoices, isLoading, onStatusChange, sortState, o
                 </TableCell>
                 <TableCell>{formatDate(invoice.data_vencimento)}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={statusConfig.className}>
-                    {statusConfig.label}
-                  </Badge>
+                  <div>
+                    <Badge variant="outline" className={statusConfig.className}>
+                      {statusConfig.label}
+                    </Badge>
+                    {invoice.status === 'pago' && !invoice.pago_pela_empresa && invoice.marcado_pago_by_name && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Recebido por: {invoice.marcado_pago_by_name}
+                      </p>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   {invoice.status === 'pago' ? (

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Invoice, InvoiceFilters, InvoiceStats, InvoiceStatus, InvoiceSortField, InvoiceSortState } from '@/types/invoice';
 import type { PaginationState } from '@/types/customer';
 
@@ -58,6 +59,7 @@ const fetchAllInBatches = async (queryBuilder: any) => {
 };
 
 export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => {
+  const { user } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [allFilteredInvoices, setAllFilteredInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -152,6 +154,9 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
           data_vencimento,
           data_pagamento,
           mes_safra_cadastro,
+          pago_pela_empresa,
+          marcado_pago_by,
+          marcado_pago_at,
           created_at,
           customer:customers(id, nome, cpf_cnpj, telefone, email),
           sales_base:sales_base_id(os)
@@ -196,11 +201,32 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
           mes_safra_cadastro: contract.mes_safra_cadastro,
           os: salesBaseData?.os || null,
           observacoes: null,
+          pago_pela_empresa: contract.pago_pela_empresa || false,
+          marcado_pago_by: contract.marcado_pago_by || null,
+          marcado_pago_at: contract.marcado_pago_at || null,
+          marcado_pago_by_name: null,
           created_at: contract.created_at,
           updated_at: contract.created_at,
           customer: customerData,
         };
       });
+
+      // Resolve marcado_pago_by names
+      const userIds = [...new Set(processedInvoices.map(inv => inv.marcado_pago_by).filter(Boolean))] as string[];
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('users_profile')
+          .select('user_id, full_name')
+          .in('user_id', userIds);
+        if (profiles) {
+          const nameMap = new Map(profiles.map(p => [p.user_id, p.full_name]));
+          processedInvoices.forEach(inv => {
+            if (inv.marcado_pago_by) {
+              inv.marcado_pago_by_name = nameMap.get(inv.marcado_pago_by) || null;
+            }
+          });
+        }
+      }
 
       // Apply client-side filters (status, search, overdueRange)
       if (filters.status !== 'all') {
@@ -295,8 +321,12 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     const updateData: Record<string, unknown> = {};
     if (status === 'pago') {
       updateData.data_pagamento = new Date().toISOString().split('T')[0];
+      updateData.marcado_pago_by = user?.id || null;
+      updateData.marcado_pago_at = new Date().toISOString();
     } else if (status === 'pendente' || status === 'atrasado') {
       updateData.data_pagamento = null;
+      updateData.marcado_pago_by = null;
+      updateData.marcado_pago_at = null;
     }
 
     if (Object.keys(updateData).length > 0) {
@@ -308,7 +338,7 @@ export const useInvoices = (initialPageSize: number = 20): UseInvoicesReturn => 
     }
     
     await fetchInvoices();
-  }, [fetchInvoices]);
+  }, [fetchInvoices, user?.id]);
 
   return {
     invoices,
