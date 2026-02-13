@@ -414,32 +414,21 @@ export const useCollection = (): UseCollectionReturn => {
       created_at: new Date().toISOString(),
     };
 
-    try {
-      const { error } = await supabase
-        .from('collection_attempts')
-        .insert({
-          customer_id: newAttempt.customer_id,
-          invoice_id: newAttempt.invoice_id,
-          collector_id: newAttempt.collector_id,
-          channel: newAttempt.channel,
-          status: newAttempt.status,
-          notes: newAttempt.notes,
-          delinquency_reason: newAttempt.delinquency_reason,
-        } as any);
+    const { error } = await supabase
+      .from('collection_attempts')
+      .insert({
+        customer_id: newAttempt.customer_id,
+        invoice_id: newAttempt.invoice_id,
+        collector_id: newAttempt.collector_id,
+        channel: newAttempt.channel,
+        status: newAttempt.status,
+        notes: newAttempt.notes,
+        delinquency_reason: newAttempt.delinquency_reason,
+      } as any);
 
-      if (error) {
-        console.error('Supabase insert error:', error);
-        // Fallback to localStorage
-        const localAttempts = getLocalStorageData<CollectionAttempt>(LS_ATTEMPTS_KEY);
-        localAttempts.push(newAttempt);
-        setLocalStorageData(LS_ATTEMPTS_KEY, localAttempts);
-      }
-    } catch (err) {
-      console.error('Error registering attempt:', err);
-      // Fallback to localStorage
-      const localAttempts = getLocalStorageData<CollectionAttempt>(LS_ATTEMPTS_KEY);
-      localAttempts.push(newAttempt);
-      setLocalStorageData(LS_ATTEMPTS_KEY, localAttempts);
+    if (error) {
+      console.error('Supabase insert error:', error);
+      throw new Error('Erro ao salvar tentativa de contato: ' + error.message);
     }
 
     // Refresh attempts
@@ -459,30 +448,19 @@ export const useCollection = (): UseCollectionReturn => {
       created_at: new Date().toISOString(),
     };
 
-    try {
-      const { error } = await supabase
-        .from('payment_promises')
-        .insert({
-          invoice_id: newPromise.invoice_id,
-          collector_id: newPromise.collector_id,
-          valor_prometido: newPromise.valor_prometido,
-          data_prometida: newPromise.data_prometida,
-          status: 'pendente' as const,
-        });
+    const { error } = await supabase
+      .from('payment_promises')
+      .insert({
+        invoice_id: newPromise.invoice_id,
+        collector_id: newPromise.collector_id,
+        valor_prometido: newPromise.valor_prometido,
+        data_prometida: newPromise.data_prometida,
+        status: 'pendente' as const,
+      });
 
-      if (error) {
-        console.error('Supabase insert error:', error);
-        // Fallback to localStorage
-        const localPromises = getLocalStorageData<PaymentPromise>(LS_PROMISES_KEY);
-        localPromises.push(newPromise);
-        setLocalStorageData(LS_PROMISES_KEY, localPromises);
-      }
-    } catch (err) {
-      console.error('Error registering promise:', err);
-      // Fallback to localStorage
-      const localPromises = getLocalStorageData<PaymentPromise>(LS_PROMISES_KEY);
-      localPromises.push(newPromise);
-      setLocalStorageData(LS_PROMISES_KEY, localPromises);
+    if (error) {
+      console.error('Supabase insert error:', error);
+      throw new Error('Erro ao salvar promessa de pagamento: ' + error.message);
     }
 
     // Refresh promises if we have the customer
