@@ -1,53 +1,41 @@
 
+# Corrigir historico na Cobranca Preventiva
 
-# Corrigir tela branca no Login apos limpar cache
+## Problema identificado
 
-## Problema
+Os logs do Supabase mostram o erro exato:
 
-Apos limpar o cache do navegador, o sistema exibe uma tela branca na URL `/login`. Isso geralmente acontece porque:
+```
+ERROR: insert or update on table "collection_attempts" violates foreign key constraint "collection_attempts_invoice_id_fkey"
+Key (invoice_id)=(d33b6763-...) is not present in table "operator_contracts".
+```
 
-1. **Assets antigos em cache** - O navegador pode manter versoes antigas dos arquivos JavaScript/CSS em cache do Service Worker ou cache HTTP, causando conflito com a versao atual
-2. **Erros nao tratados** - Se qualquer erro JavaScript ocorre durante a renderizacao, o React "morre" silenciosamente e mostra tela branca
+A coluna `invoice_id` da tabela `collection_attempts` tem uma Foreign Key que referencia `operator_contracts(id)`. Porem, na cobranca preventiva, o sistema passa o ID da tabela `sales_base` como `invoice_id` -- tanto no registro manual (formulario) quanto no automatico (envio de WhatsApp). Como esse ID nao existe na tabela `operator_contracts`, o INSERT falha silenciosamente e o historico nunca e gravado.
+
+Na cobranca regular isso funciona porque la o `invoice_id` vem de `operator_contracts.id`, que e a tabela correta.
 
 ## Solucao
 
-### 1. Adicionar Error Boundary global
+Tornar a coluna `invoice_id` **nullable** na tabela `collection_attempts`, permitindo que registros preventivos sejam gravados sem um vinculo com `operator_contracts`. Clientes preventivos nao possuem contratos na operadora, entao nao ha um ID valido para referenciar.
 
-Criar um componente `ErrorBoundary` que captura erros de renderizacao do React e exibe uma mensagem amigavel com botao para recarregar, em vez de mostrar tela branca.
+### Alteracoes
 
-**Novo arquivo: `src/components/ErrorBoundary.tsx`**
+**1. Migration SQL (nova migration)**
+- `ALTER TABLE collection_attempts ALTER COLUMN invoice_id DROP NOT NULL;`
+- Isso permite inserir tentativas sem `invoice_id`
 
-### 2. Adicionar tratamento de erros asincronos
+**2. `src/hooks/usePreventiveCollection.ts`**
+- Na funcao `registerAttempt`, passar `invoice_id` como `null` em vez de `sales_base.id`
+- O campo `customer_id` ja e suficiente para vincular o historico ao cliente
 
-No `App.tsx`, adicionar um listener global para `unhandledrejection` que captura promises rejeitadas (ex: falha na conexao com Supabase) e evita que o app quebre silenciosamente.
+**3. `src/components/preventive/PreventiveMessageTemplates.tsx`**
+- Na chamada a `sendMessage`, passar `undefined` como `invoiceId` em vez de `salesBaseId`
 
-### 3. Adicionar meta tags anti-cache no `index.html`
+**4. `supabase/functions/send-whatsapp/index.ts`**
+- No bloco que registra o `collection_attempt` automatico, inserir `invoice_id` somente quando ele for fornecido (tratar como opcional)
+- Alterar a condicao de `if (customer_id && invoice_id)` para `if (customer_id)`, registrando o contato mesmo sem `invoice_id`
 
-Incluir headers HTTP via meta tags para garantir que o navegador sempre busque a versao mais recente dos arquivos:
+**5. `src/pages/PreventiveCollection.tsx`**
+- Remover o `invoice_id: selectedCustomer.id` do payload de `registerAttempt`, ou passar `null`
 
-```text
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-<meta http-equiv="Pragma" content="no-cache" />
-<meta http-equiv="Expires" content="0" />
-```
-
-### 4. Envolver o App com o ErrorBoundary
-
-No `src/main.tsx`, envolver o componente `App` com o `ErrorBoundary` para que qualquer erro seja capturado e exiba uma tela de recuperacao em vez de tela branca.
-
-## Detalhes tecnicos
-
-**`src/components/ErrorBoundary.tsx`** (novo arquivo)
-- Componente de classe React que implementa `componentDidCatch` e `getDerivedStateFromError`
-- Quando um erro e capturado, exibe uma tela com mensagem "Ocorreu um erro" e um botao "Recarregar Sistema"
-- O botao limpa o localStorage, sessionStorage e caches do navegador antes de recarregar
-
-**`src/main.tsx`**
-- Importar e envolver `<App />` com `<ErrorBoundary>`
-
-**`src/App.tsx`**
-- Adicionar `useEffect` com listener para `unhandledrejection` como rede de seguranca
-
-**`index.html`**
-- Adicionar meta tags anti-cache no `<head>`
-
+Essas mudancas garantem que o historico funcione para ambos os fluxos (preventivo e regular) sem quebrar a integridade referencial existente.
