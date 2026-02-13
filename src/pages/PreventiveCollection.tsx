@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, RefreshCw, CalendarClock } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { usePreventiveCollection } from '@/hooks/usePreventiveCollection';
@@ -157,28 +158,18 @@ export default function PreventiveCollection() {
                     customer={selectedCustomer}
                   />
 
-                  {showAttemptForm ? (
-                    <AttemptForm
-                      customerId={selectedCustomer.customer_id}
-                      initialChannel={attemptChannel}
-                      onSubmit={handleSubmitAttempt}
-                      onCancel={() => setShowAttemptForm(false)}
-                      isLoading={isSaving}
-                    />
-                  ) : (
-                    <PreventiveMessageTemplates
-                      customerName={selectedCustomer.customer_name}
-                      customerCpf={selectedCustomer.customer_cpf_cnpj}
-                      customerPhone={selectedCustomer.customer_phone || ''}
-                      customerId={selectedCustomer.customer_id}
-                      salesBaseId={selectedCustomer.id}
-                      dataVencimento={selectedCustomer.data_vencimento}
-                      onMessageSent={async () => {
-                        await refreshHistory();
-                        refreshQueue();
-                      }}
-                    />
-                  )}
+                  <PreventiveMessageTemplates
+                    customerName={selectedCustomer.customer_name}
+                    customerCpf={selectedCustomer.customer_cpf_cnpj}
+                    customerPhone={selectedCustomer.customer_phone || ''}
+                    customerId={selectedCustomer.customer_id}
+                    salesBaseId={selectedCustomer.id}
+                    dataVencimento={selectedCustomer.data_vencimento}
+                    onMessageSent={async () => {
+                      await refreshHistory();
+                      refreshQueue();
+                    }}
+                  />
                 </div>
 
                 {/* Right Column */}
@@ -190,16 +181,14 @@ export default function PreventiveCollection() {
                     onDeleteAttempt={deleteAttempt}
                   />
 
-                  {!showAttemptForm && (
-                    <Button
-                      className="w-full"
-                      size="lg"
-                      onClick={() => handleStartAttempt('telefone')}
-                    >
-                      <CalendarClock className="h-4 w-4 mr-2" />
-                      Registrar Nova Tentativa
-                    </Button>
-                  )}
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    onClick={() => handleStartAttempt('telefone')}
+                  >
+                    <CalendarClock className="h-4 w-4 mr-2" />
+                    Registrar Nova Tentativa
+                  </Button>
                 </div>
               </div>
             </>
@@ -218,6 +207,22 @@ export default function PreventiveCollection() {
           )}
         </div>
       </div>
+      <Dialog open={showAttemptForm} onOpenChange={setShowAttemptForm}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Registrar Tentativa</DialogTitle>
+          </DialogHeader>
+          {selectedCustomer && (
+            <AttemptForm
+              customerId={selectedCustomer.customer_id}
+              initialChannel={attemptChannel}
+              onSubmit={handleSubmitAttempt}
+              onCancel={() => setShowAttemptForm(false)}
+              isLoading={isSaving}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
