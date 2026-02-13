@@ -1,0 +1,1 @@
+ALTER TABLE public.collection_attempts ALTER COLUMN invoice_id DROP NOT NULL;

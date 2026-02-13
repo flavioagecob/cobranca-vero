@@ -47,7 +47,6 @@ export default function PreventiveCollection() {
     try {
       await registerAttempt({
         customer_id: selectedCustomer.customer_id,
-        invoice_id: selectedCustomer.id, // sales_base id as reference
         channel: data.channel,
         status: data.status,
         notes: data.notes,
