@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, RefreshCw, Phone } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, Phone, MessageCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -40,6 +40,7 @@ export default function Collection() {
   } = useCollection();
 
   const [showAttemptForm, setShowAttemptForm] = useState(false);
+  const [showMessageTemplates, setShowMessageTemplates] = useState(false);
   const [attemptChannel, setAttemptChannel] = useState<AttemptChannel>('telefone');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -183,19 +184,15 @@ export default function Collection() {
                 <div className="space-y-4">
                   <CustomerInfoCard customer={selectedCustomer} />
 
-                  <MessageTemplates
-                    customerName={selectedCustomer.customer_name}
-                    customerCpf={selectedCustomer.customer_cpf_cnpj}
-                    customerPhone={selectedCustomer.customer_phone || ''}
-                    customerId={selectedCustomer.customer_id}
-                    invoiceId={selectedCustomer.first_invoice_id}
-                    valorPendente={selectedCustomer.total_pendente}
-                    diasAtraso={selectedCustomer.max_dias_atraso}
-                    onMessageSent={async () => {
-                      await refreshHistory();
-                      refreshQueue();
-                    }}
-                  />
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    variant="outline"
+                    onClick={() => setShowMessageTemplates(true)}
+                  >
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Cobrar Cliente
+                  </Button>
                 </div>
 
                 {/* Right Column */}
@@ -247,6 +244,29 @@ export default function Collection() {
               onSubmit={handleSubmitAttempt}
               onCancel={() => setShowAttemptForm(false)}
               isLoading={isSaving}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showMessageTemplates} onOpenChange={setShowMessageTemplates}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Cobrar Cliente</DialogTitle>
+          </DialogHeader>
+          {selectedCustomer && (
+            <MessageTemplates
+              customerName={selectedCustomer.customer_name}
+              customerCpf={selectedCustomer.customer_cpf_cnpj}
+              customerPhone={selectedCustomer.customer_phone || ''}
+              customerId={selectedCustomer.customer_id}
+              invoiceId={selectedCustomer.first_invoice_id}
+              valorPendente={selectedCustomer.total_pendente}
+              diasAtraso={selectedCustomer.max_dias_atraso}
+              onMessageSent={async () => {
+                setShowMessageTemplates(false);
+                await refreshHistory();
+                refreshQueue();
+              }}
             />
           )}
         </DialogContent>
