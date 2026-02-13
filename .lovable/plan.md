@@ -1,36 +1,24 @@
 
 
-## Corrigir Politicas RLS que Impedem Cobradores de Salvar Tentativas
+## Corrigir Erro ao Registrar Tentativas de Contato
 
-### Problema Identificado
-Todas as politicas RLS nas tabelas `collection_attempts` e `payment_promises` estao como **RESTRICTIVE** (nao-permissivas). No PostgreSQL, politicas restritivas funcionam com logica AND -- todas devem passar. Como um cobrador nao e admin nem supervisor, o INSERT sempre falha silenciosamente. O codigo tem um fallback para localStorage que faz parecer que salvou, mas os dados nao vao para o banco.
+### Problema
+Os logs do banco mostram repetidamente o erro:
+```
+invalid input value for enum delinquency_reason: "cliente_nao_responde"
+```
+
+O valor `cliente_nao_responde` existe no frontend (tipo TypeScript + configuracao visual) mas **nunca foi adicionado ao enum `delinquency_reason` no banco de dados**. Quando o operador seleciona esse motivo, o INSERT falha.
 
 ### Solucao
-Recriar as politicas RLS como **PERMISSIVE** (que usam logica OR -- basta uma passar). Tambem remover as politicas genericas duplicadas ("Users can insert/view attempts") que sao redundantes.
+Executar uma migracao SQL para adicionar o valor ausente ao enum:
 
-### Alteracoes
-
-#### 1. Migracao SQL - Tabela `collection_attempts`
-- Dropar todas as politicas existentes
-- Recriar como PERMISSIVE:
-  - **admin**: ALL (usando `has_role(auth.uid(), 'admin')`)
-  - **supervisor**: ALL (usando `has_role(auth.uid(), 'supervisor')`)
-  - **cobrador SELECT**: SELECT (usando `has_role(auth.uid(), 'cobrador')`)
-  - **cobrador INSERT**: INSERT (com check `has_role(auth.uid(), 'cobrador') AND collector_id = auth.uid()`)
-  - **cobrador UPDATE**: UPDATE (usando `has_role(auth.uid(), 'cobrador') AND collector_id = auth.uid()`)
-  - **cobrador DELETE**: DELETE (usando `has_role(auth.uid(), 'cobrador') AND collector_id = auth.uid()`)
-
-#### 2. Migracao SQL - Tabela `payment_promises`
-- Mesma correcao: dropar politicas e recriar como PERMISSIVE
-- Remover politicas genericas duplicadas ("Users can manage/view promises")
-
-#### 3. Codigo - `src/hooks/useCollection.ts`
-- Remover o fallback silencioso para localStorage no `registerAttempt` e `registerPromise`
-- Quando o insert falhar, propagar o erro (throw) para que o toast de erro apareca na tela em vez de fingir que salvou
-- Manter a funcao de leitura do localStorage como fallback apenas para fetch (leitura)
+```sql
+ALTER TYPE public.delinquency_reason ADD VALUE 'cliente_nao_responde';
+```
 
 ### Impacto
-- Cobradores poderao salvar tentativas e promessas corretamente no banco de dados
-- Erros de salvamento serao exibidos ao usuario em vez de serem silenciados
-- Dados existentes no banco nao sao afetados
+- Nenhuma alteracao de codigo necessaria -- o frontend ja esta correto
+- Apenas uma migracao de banco de dados
+- Apos a correcao, todos os motivos de inadimplencia funcionarao normalmente
 
