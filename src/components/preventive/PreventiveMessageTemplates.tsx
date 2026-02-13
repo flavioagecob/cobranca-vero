@@ -84,7 +84,7 @@ export function PreventiveMessageTemplates({
     if (!customerPhone) { toast.error('Cliente não possui telefone cadastrado'); return; }
     if (!selectedInstanceId) { toast.error('Selecione uma instância WhatsApp'); return; }
 
-    const result = await sendMessage(customerPhone, editedContent, customerId, salesBaseId);
+    const result = await sendMessage(customerPhone, editedContent, customerId, undefined);
     if (result.success) {
       toast.success('Mensagem enviada e contato registrado!');
       onMessageSent?.();

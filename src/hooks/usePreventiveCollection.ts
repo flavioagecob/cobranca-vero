@@ -38,7 +38,6 @@ export interface PreventiveFilters {
 
 interface NewPreventiveAttempt {
   customer_id: string;
-  invoice_id: string; // sales_base id used as reference
   channel: AttemptChannel;
   status: AttemptResult;
   notes?: string;
@@ -285,7 +284,7 @@ export const usePreventiveCollection = (): UsePreventiveCollectionReturn => {
         .from('collection_attempts')
         .insert({
           customer_id: data.customer_id,
-          invoice_id: data.invoice_id,
+          invoice_id: null as any,
           collector_id: user.id,
           channel: data.channel,
           status: data.status,

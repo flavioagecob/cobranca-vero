@@ -118,20 +118,23 @@ Deno.serve(async (req) => {
       responseData = { raw: webhookData };
     }
 
-    // Register collection attempt if customer_id and invoice_id are provided
+    // Register collection attempt if customer_id is provided
     let attemptId: string | null = null;
-    if (customer_id && invoice_id) {
+    if (customer_id) {
       console.log('Registering collection attempt...');
+      const attemptPayload: Record<string, unknown> = {
+        customer_id,
+        collector_id: user.id,
+        channel: 'whatsapp',
+        status: 'sucesso',
+        notes: 'Mensagem enviada automaticamente via template',
+      };
+      if (invoice_id) {
+        attemptPayload.invoice_id = invoice_id;
+      }
       const { data: attemptData, error: attemptError } = await supabase
         .from('collection_attempts')
-        .insert({
-          customer_id,
-          invoice_id,
-          collector_id: user.id,
-          channel: 'whatsapp',
-          status: 'sucesso',
-          notes: 'Mensagem enviada automaticamente via template',
-        })
+        .insert(attemptPayload)
         .select('id')
         .single();
 

@@ -60,7 +60,7 @@ export type Database = {
             | Database["public"]["Enums"]["delinquency_reason"]
             | null
           id: string
-          invoice_id: string
+          invoice_id: string | null
           notes: string | null
           status: Database["public"]["Enums"]["attempt_status"]
         }
@@ -73,7 +73,7 @@ export type Database = {
             | Database["public"]["Enums"]["delinquency_reason"]
             | null
           id?: string
-          invoice_id: string
+          invoice_id?: string | null
           notes?: string | null
           status: Database["public"]["Enums"]["attempt_status"]
         }
@@ -86,7 +86,7 @@ export type Database = {
             | Database["public"]["Enums"]["delinquency_reason"]
             | null
           id?: string
-          invoice_id?: string
+          invoice_id?: string | null
           notes?: string | null
           status?: Database["public"]["Enums"]["attempt_status"]
         }
