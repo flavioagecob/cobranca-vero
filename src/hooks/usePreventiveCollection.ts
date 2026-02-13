@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { format, addDays, startOfDay } from 'date-fns';
-import type { CollectionAttempt, AttemptChannel, AttemptResult } from '@/types/collection';
+import type { CollectionAttempt, AttemptChannel, AttemptResult, DelinquencyReason } from '@/types/collection';
 
 export interface PreventiveQueueItem {
   id: string; // sales_base id
@@ -41,6 +41,7 @@ interface NewPreventiveAttempt {
   channel: AttemptChannel;
   status: AttemptResult;
   notes?: string;
+  delinquencyReason?: DelinquencyReason;
 }
 
 interface UsePreventiveCollectionReturn {
@@ -284,11 +285,11 @@ export const usePreventiveCollection = (): UsePreventiveCollectionReturn => {
         .from('collection_attempts')
         .insert({
           customer_id: data.customer_id,
-          invoice_id: null as any,
           collector_id: user.id,
           channel: data.channel,
           status: data.status,
           notes: data.notes || null,
+          delinquency_reason: (data.delinquencyReason as any) || null,
         });
 
       if (error) {
