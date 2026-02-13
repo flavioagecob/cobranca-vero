@@ -1,0 +1,1 @@
+ALTER TYPE public.delinquency_reason ADD VALUE 'cliente_nao_responde';

@@ -648,6 +648,7 @@ export type Database = {
         | "nao_ativado_streaming"
         | "nao_gerou_boleto"
         | "mudar_data_vencimento"
+        | "cliente_nao_responde"
       import_type: "sales" | "operator" | "preventive"
       invoice_status:
         | "pendente"
@@ -810,6 +811,7 @@ export const Constants = {
         "nao_ativado_streaming",
         "nao_gerou_boleto",
         "mudar_data_vencimento",
+        "cliente_nao_responde",
       ],
       import_type: ["sales", "operator", "preventive"],
       invoice_status: [
