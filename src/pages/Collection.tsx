@@ -187,7 +187,6 @@ export default function Collection() {
                   <Button
                     className="w-full"
                     size="lg"
-                    variant="outline"
                     onClick={() => setShowMessageTemplates(true)}
                   >
                     <MessageCircle className="h-4 w-4 mr-2" />
