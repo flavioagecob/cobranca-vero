@@ -32,6 +32,10 @@ export default function Collection() {
     refreshHistory,
     nextCustomer,
     previousCustomer,
+    updateAttempt,
+    deleteAttempt,
+    updatePromise,
+    deletePromise,
   } = useCollection();
 
   const [showAttemptForm, setShowAttemptForm] = useState(false);
@@ -205,7 +209,14 @@ export default function Collection() {
 
                 {/* Right Column */}
                 <div className="space-y-4">
-                  <HistoryTimeline attempts={attempts} promises={promises} />
+                  <HistoryTimeline
+                    attempts={attempts}
+                    promises={promises}
+                    onEditAttempt={updateAttempt}
+                    onDeleteAttempt={deleteAttempt}
+                    onEditPromise={updatePromise}
+                    onDeletePromise={deletePromise}
+                  />
 
                   {!showAttemptForm && (
                     <Button 
