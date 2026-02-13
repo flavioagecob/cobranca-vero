@@ -50,6 +50,7 @@ export default function PreventiveCollection() {
         channel: data.channel,
         status: data.status,
         notes: data.notes,
+        delinquencyReason: data.delinquencyReason,
       });
 
       toast.success('Tentativa registrada!');
