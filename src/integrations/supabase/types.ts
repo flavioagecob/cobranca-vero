@@ -293,6 +293,8 @@ export type Database = {
           id: string
           id_contrato: string
           import_batch_id: string | null
+          marcado_pago_at: string | null
+          marcado_pago_by: string | null
           mes_safra_cadastro: string | null
           mes_safra_vencimento: string | null
           numero_contrato_operadora: string | null
@@ -318,6 +320,8 @@ export type Database = {
           id?: string
           id_contrato: string
           import_batch_id?: string | null
+          marcado_pago_at?: string | null
+          marcado_pago_by?: string | null
           mes_safra_cadastro?: string | null
           mes_safra_vencimento?: string | null
           numero_contrato_operadora?: string | null
@@ -343,6 +347,8 @@ export type Database = {
           id?: string
           id_contrato?: string
           import_batch_id?: string | null
+          marcado_pago_at?: string | null
+          marcado_pago_by?: string | null
           mes_safra_cadastro?: string | null
           mes_safra_vencimento?: string | null
           numero_contrato_operadora?: string | null
