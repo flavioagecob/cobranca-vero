@@ -29,6 +29,8 @@ export default function PreventiveCollection() {
     registerAttempt,
     refreshQueue,
     refreshHistory,
+    updateAttempt,
+    deleteAttempt,
   } = usePreventiveCollection();
 
   const [showAttemptForm, setShowAttemptForm] = useState(false);
@@ -181,7 +183,12 @@ export default function PreventiveCollection() {
 
                 {/* Right Column */}
                 <div className="space-y-4">
-                  <HistoryTimeline attempts={attempts} promises={[]} />
+                  <HistoryTimeline
+                    attempts={attempts}
+                    promises={[]}
+                    onEditAttempt={updateAttempt}
+                    onDeleteAttempt={deleteAttempt}
+                  />
 
                   {!showAttemptForm && (
                     <Button

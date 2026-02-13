@@ -57,6 +57,8 @@ interface UsePreventiveCollectionReturn {
   nextCustomer: () => void;
   previousCustomer: () => void;
   registerAttempt: (data: NewPreventiveAttempt) => Promise<void>;
+  updateAttempt: (id: string, data: { channel: AttemptChannel; status: AttemptResult; notes?: string; delinquency_reason?: DelinquencyReason | null }) => Promise<void>;
+  deleteAttempt: (id: string) => Promise<void>;
   refreshQueue: () => void;
   refreshHistory: () => Promise<void>;
 }
@@ -308,6 +310,29 @@ export const usePreventiveCollection = (): UsePreventiveCollectionReturn => {
     }
   }, [selectedCustomer, fetchAttempts]);
 
+  const updateAttempt = useCallback(async (id: string, data: { channel: AttemptChannel; status: AttemptResult; notes?: string; delinquency_reason?: DelinquencyReason | null }) => {
+    const { error } = await supabase
+      .from('collection_attempts')
+      .update({
+        channel: data.channel,
+        status: data.status,
+        notes: data.notes || null,
+        delinquency_reason: data.delinquency_reason || null,
+      } as any)
+      .eq('id', id);
+    if (error) throw error;
+    if (selectedCustomer) await fetchAttempts(selectedCustomer.customer_id);
+  }, [selectedCustomer, fetchAttempts]);
+
+  const deleteAttempt = useCallback(async (id: string) => {
+    const { error } = await supabase
+      .from('collection_attempts')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    if (selectedCustomer) await fetchAttempts(selectedCustomer.customer_id);
+  }, [selectedCustomer, fetchAttempts]);
+
   return {
     queue,
     selectedCustomer,
@@ -321,6 +346,8 @@ export const usePreventiveCollection = (): UsePreventiveCollectionReturn => {
     nextCustomer,
     previousCustomer,
     registerAttempt,
+    updateAttempt,
+    deleteAttempt,
     refreshQueue: fetchQueue,
     refreshHistory,
   };

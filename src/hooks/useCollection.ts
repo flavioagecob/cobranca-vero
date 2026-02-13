@@ -39,6 +39,10 @@ interface UseCollectionReturn {
   registerAttempt: (data: NewAttempt) => Promise<void>;
   registerPromise: (data: NewPromise) => Promise<void>;
   updatePromiseStatus: (id: string, status: PromiseStatus) => Promise<void>;
+  updateAttempt: (id: string, data: { channel: AttemptChannel; status: AttemptResult; notes?: string; delinquency_reason?: DelinquencyReason | null }) => Promise<void>;
+  deleteAttempt: (id: string) => Promise<void>;
+  updatePromise: (id: string, data: { valor_prometido: number; data_prometida: string; status: PromiseStatus }) => Promise<void>;
+  deletePromise: (id: string) => Promise<void>;
   refreshQueue: () => void;
   refreshHistory: () => Promise<void>;
   nextCustomer: () => void;
@@ -548,6 +552,51 @@ export const useCollection = (): UseCollectionReturn => {
     await fetchQueue();
   }, [user, fetchQueue]);
 
+  const updateAttempt = useCallback(async (id: string, data: { channel: AttemptChannel; status: AttemptResult; notes?: string; delinquency_reason?: DelinquencyReason | null }) => {
+    const { error } = await supabase
+      .from('collection_attempts')
+      .update({
+        channel: data.channel,
+        status: data.status,
+        notes: data.notes || null,
+        delinquency_reason: data.delinquency_reason || null,
+      } as any)
+      .eq('id', id);
+    if (error) throw error;
+    if (selectedCustomer) await fetchAttempts(selectedCustomer.customer_id);
+  }, [selectedCustomer, fetchAttempts]);
+
+  const deleteAttempt = useCallback(async (id: string) => {
+    const { error } = await supabase
+      .from('collection_attempts')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    if (selectedCustomer) await fetchAttempts(selectedCustomer.customer_id);
+  }, [selectedCustomer, fetchAttempts]);
+
+  const updatePromise = useCallback(async (id: string, data: { valor_prometido: number; data_prometida: string; status: PromiseStatus }) => {
+    const { error } = await supabase
+      .from('payment_promises')
+      .update({
+        valor_prometido: data.valor_prometido,
+        data_prometida: data.data_prometida,
+        status: data.status,
+      })
+      .eq('id', id);
+    if (error) throw error;
+    if (selectedCustomer) await fetchPromises(selectedCustomer.customer_id);
+  }, [selectedCustomer, fetchPromises]);
+
+  const deletePromise = useCallback(async (id: string) => {
+    const { error } = await supabase
+      .from('payment_promises')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    if (selectedCustomer) await fetchPromises(selectedCustomer.customer_id);
+  }, [selectedCustomer, fetchPromises]);
+
   return {
     queue,
     selectedCustomer,
@@ -564,6 +613,10 @@ export const useCollection = (): UseCollectionReturn => {
     registerAttempt,
     registerPromise,
     updatePromiseStatus,
+    updateAttempt,
+    deleteAttempt,
+    updatePromise,
+    deletePromise,
     refreshQueue: fetchQueue,
     refreshHistory,
     nextCustomer,
