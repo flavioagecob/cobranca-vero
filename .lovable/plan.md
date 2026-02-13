@@ -1,42 +1,31 @@
 
-## Transformar Formulário de Tentativa em Modal/Dialog
 
-### Problema Identificado
-Atualmente, o `AttemptForm` é renderizado inline na página quando `showAttemptForm` é `true`, ocupando espaço vertical e forçando scroll na coluna esquerda. Isso prejudica a experiência, especialmente em telas menores.
+## Trocar Templates de Mensagem por Botao + Modal
 
-### Solução Proposta
-Envolver o `AttemptForm` em um componente `Dialog` (do shadcn/ui), mantendo o mesmo formulário mas apresentando-o em um modal flutuante.
+### Objetivo
+Substituir o componente `MessageTemplates` / `PreventiveMessageTemplates` renderizado inline na coluna esquerda por um botao "Cobrar Cliente" que, ao ser clicado, abre os templates dentro de um modal Dialog. Isso libera espaco na tela e mantem o foco no historico e dados do cliente.
 
-### Alterações Necessárias
+### Alteracoes
 
 #### 1. `src/pages/Collection.tsx`
-- Importar `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle` de `@/components/ui/dialog`
-- Remover a renderização condicional do `AttemptForm` inline (linhas 185-192)
-- Adicionar um `Dialog` que:
-  - Fica aberto quando `showAttemptForm === true`
-  - Renderiza o `AttemptForm` dentro do `DialogContent`
-  - Fecha quando `onCancel` é chamado (setando `showAttemptForm` para `false`)
-- Manter o botão "Registrar Nova Tentativa" sempre visível (remover a condição `{!showAttemptForm && ...}`)
-- O `MessageTemplates` também fica sempre visível
+- Adicionar estado `showMessageTemplates` (boolean, inicialmente `false`)
+- Remover o componente `<MessageTemplates ... />` inline (linhas 186-198)
+- No lugar, colocar um botao "Cobrar Cliente" (com icone `MessageCircle`) que seta `showMessageTemplates = true`
+- Adicionar um `<Dialog>` controlado por `showMessageTemplates` que renderiza o `<MessageTemplates>` dentro do `<DialogContent>`
+- O callback `onMessageSent` fecha o modal alem de atualizar o historico
 
 #### 2. `src/pages/PreventiveCollection.tsx`
-- Mesmas alterações do arquivo `Collection.tsx`
-- Importar os componentes do Dialog
-- Envolver o `AttemptForm` em um `Dialog`
-- Manter o botão sempre visível
+- Mesma abordagem: estado `showMessageTemplates`, botao "Cobrar Cliente" e Dialog envolvendo `<PreventiveMessageTemplates>`
+- O callback `onMessageSent` fecha o modal alem de atualizar o historico
 
-#### 3. `src/components/collection/AttemptForm.tsx` (sem alterações)
-- O componente continua igual, apenas muda sua contexto de renderização
-- O `Card` wrapper pode ser removido já que agora será renderizado dentro de um `Dialog` que já tem visual de modal
+### Layout Resultante (coluna esquerda)
+```text
++----------------------------+
+| CustomerInfoCard           |
++----------------------------+
+| [Cobrar Cliente]  (botao)  |
++----------------------------+
+```
 
-**Opcional**: Remover o `Card` e `CardHeader`/`CardContent` do `AttemptForm` para deixá-lo mais limpo dentro do modal, aplicando as classes direto na `DialogContent`.
-
-### Benefícios
-- Evita scroll desnecessário na página
-- Mantém a visão das mensagens e histórico enquanto preenche o formulário
-- Interface mais limpa e focada
-- Padrão comum em aplicações web
-
-### Componentes Já Disponíveis
-O projeto já possui o componente `Dialog` do shadcn/ui (arquivo `src/components/ui/dialog.tsx`), então não precisa instalar dependências.
+Nenhuma alteracao nos componentes `MessageTemplates` ou `PreventiveMessageTemplates` em si -- eles continuam funcionando igual, apenas renderizados dentro de um Dialog.
 
