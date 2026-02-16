@@ -1,27 +1,33 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
+export interface CityRankingItem {
+  cidade: string;
+  count: number;
+  value: number;
+}
+
 export interface DashboardStats {
-  // Clientes
   totalCustomers: number;
-  
-  // Faturas
   pendingInvoicesValue: number;
   pendingInvoicesCount: number;
   paidInvoicesValue: number;
   paidInvoicesCount: number;
-  
-  // Contratos
   enabledContracts: number;
   contractsByStatus: Record<string, number>;
-  
-  // Vencimentos
   overdueCount: number;
   overdueValue: number;
   todayDueCount: number;
   todayDueValue: number;
   next7DaysCount: number;
   next7DaysValue: number;
+  cityRankingInadimplencia: CityRankingItem[];
+  cityRankingAdimplencia: CityRankingItem[];
+}
+
+interface FilterOptions {
+  safraOptions: string[];
+  parcelaOptions: string[];
 }
 
 interface UseDashboardStatsReturn {
@@ -29,6 +35,7 @@ interface UseDashboardStatsReturn {
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
+  filterOptions: FilterOptions;
 }
 
 const initialStats: DashboardStats = {
@@ -45,77 +52,97 @@ const initialStats: DashboardStats = {
   todayDueValue: 0,
   next7DaysCount: 0,
   next7DaysValue: 0,
+  cityRankingInadimplencia: [],
+  cityRankingAdimplencia: [],
 };
 
-export const useDashboardStats = (): UseDashboardStatsReturn => {
+export const useDashboardStats = (safra?: string, parcela?: string): UseDashboardStatsReturn => {
   const [stats, setStats] = useState<DashboardStats>(initialStats);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ safraOptions: [], parcelaOptions: [] });
 
   const fetchStats = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
+      // Fetch filter options
+      const { data: optionsData } = await supabase.rpc('get_invoice_filter_options');
+      if (optionsData) {
+        const parsed = typeof optionsData === 'string' ? JSON.parse(optionsData) : optionsData;
+        setFilterOptions({
+          safraOptions: (parsed.safras || []) as string[],
+          parcelaOptions: (parsed.parcelas || []) as string[],
+        });
+      }
+
       // Fetch total customers
       const { count: customersCount, error: customersError } = await supabase
         .from('customers')
         .select('*', { count: 'exact', head: true });
-
       if (customersError) throw customersError;
 
-      // Fetch operator contracts stats - include id_contrato for unique counting
-      const { data: contractsData, error: contractsError } = await supabase
+      // Build contracts query with filters
+      let contractsQuery = supabase
         .from('operator_contracts')
-        .select('id_contrato, status_contrato, valor_fatura, data_vencimento, data_pagamento');
+        .select('id_contrato, status_contrato, valor_fatura, data_vencimento, data_pagamento, customer_id, mes_safra_cadastro, numero_fatura');
 
+      if (safra && safra !== 'all') {
+        contractsQuery = contractsQuery.eq('mes_safra_cadastro', safra);
+      }
+      if (parcela && parcela !== 'all') {
+        contractsQuery = contractsQuery.eq('numero_fatura', parcela);
+      }
+
+      const { data: contractsData, error: contractsError } = await contractsQuery;
       if (contractsError) throw contractsError;
 
-      // Calculate today's date at midnight
+      // Fetch customers with cities for ranking
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('id, cidade');
+
+      const customerCityMap: Record<string, string> = {};
+      (customersData || []).forEach((c) => {
+        if (c.cidade) customerCityMap[c.id] = c.cidade;
+      });
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-
-      // Calculate 7 days from today
       const next7Days = new Date(today);
       next7Days.setDate(next7Days.getDate() + 7);
 
-      // Initialize counters for INVOICES (each row = one invoice/installment)
-      let pendingValue = 0;
-      let pendingCount = 0;
-      let paidValue = 0;
-      let paidCount = 0;
-      let overdueCount = 0;
-      let overdueValue = 0;
-      let todayDueCount = 0;
-      let todayDueValue = 0;
-      let next7DaysCount = 0;
-      let next7DaysValue = 0;
+      let pendingValue = 0, pendingCount = 0, paidValue = 0, paidCount = 0;
+      let overdueCount = 0, overdueValue = 0, todayDueCount = 0, todayDueValue = 0;
+      let next7DaysCount = 0, next7DaysValue = 0;
 
-      // Use Sets to track UNIQUE CONTRACTS by id_contrato
       const uniqueContractsByStatus: Record<string, Set<string>> = {};
+      const inadimplenciaByCity: Record<string, { count: number; value: number }> = {};
+      const adimplenciaByCity: Record<string, { count: number; value: number }> = {};
 
       (contractsData || []).forEach((contract) => {
-        // Track unique contracts by status
         const status = (contract.status_contrato || 'sem_status').toLowerCase().trim();
         const idContrato = contract.id_contrato || 'unknown';
-
-        if (!uniqueContractsByStatus[status]) {
-          uniqueContractsByStatus[status] = new Set();
-        }
+        if (!uniqueContractsByStatus[status]) uniqueContractsByStatus[status] = new Set();
         uniqueContractsByStatus[status].add(idContrato);
 
-        // Invoice counting (each row = one invoice/installment)
         const isPaid = contract.data_pagamento !== null;
         const valor = contract.valor_fatura || 0;
+        const cidade = contract.customer_id ? customerCityMap[contract.customer_id] : null;
 
         if (isPaid) {
           paidCount++;
           paidValue += valor;
+          if (cidade) {
+            if (!adimplenciaByCity[cidade]) adimplenciaByCity[cidade] = { count: 0, value: 0 };
+            adimplenciaByCity[cidade].count++;
+            adimplenciaByCity[cidade].value += valor;
+          }
         } else {
           pendingCount++;
           pendingValue += valor;
 
-          // Check due dates (only for unpaid invoices)
           if (contract.data_vencimento) {
             const [year, month, day] = contract.data_vencimento.split('-').map(Number);
             const dueDate = new Date(year, month - 1, day);
@@ -124,6 +151,11 @@ export const useDashboardStats = (): UseDashboardStatsReturn => {
             if (dueDate < today) {
               overdueCount++;
               overdueValue += valor;
+              if (cidade) {
+                if (!inadimplenciaByCity[cidade]) inadimplenciaByCity[cidade] = { count: 0, value: 0 };
+                inadimplenciaByCity[cidade].count++;
+                inadimplenciaByCity[cidade].value += valor;
+              }
             } else if (dueDate.getTime() === today.getTime()) {
               todayDueCount++;
               todayDueValue += valor;
@@ -135,14 +167,20 @@ export const useDashboardStats = (): UseDashboardStatsReturn => {
         }
       });
 
-      // Convert Sets to counts for unique contracts
       const contractsByStatus: Record<string, number> = {};
-      Object.entries(uniqueContractsByStatus).forEach(([status, set]) => {
-        contractsByStatus[status] = set.size;
+      Object.entries(uniqueContractsByStatus).forEach(([s, set]) => {
+        contractsByStatus[s] = set.size;
       });
 
-      // Count unique enabled contracts
-      const enabledContracts = uniqueContractsByStatus['habilitado']?.size || 0;
+      const cityRankingInadimplencia = Object.entries(inadimplenciaByCity)
+        .map(([cidade, d]) => ({ cidade, count: d.count, value: d.value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10);
+
+      const cityRankingAdimplencia = Object.entries(adimplenciaByCity)
+        .map(([cidade, d]) => ({ cidade, count: d.count, value: d.value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10);
 
       setStats({
         totalCustomers: customersCount || 0,
@@ -150,7 +188,7 @@ export const useDashboardStats = (): UseDashboardStatsReturn => {
         pendingInvoicesCount: pendingCount,
         paidInvoicesValue: paidValue,
         paidInvoicesCount: paidCount,
-        enabledContracts,
+        enabledContracts: uniqueContractsByStatus['habilitado']?.size || 0,
         contractsByStatus,
         overdueCount,
         overdueValue,
@@ -158,22 +196,19 @@ export const useDashboardStats = (): UseDashboardStatsReturn => {
         todayDueValue,
         next7DaysCount,
         next7DaysValue,
+        cityRankingInadimplencia,
+        cityRankingAdimplencia,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar estatísticas');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [safra, parcela]);
 
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
 
-  return {
-    stats,
-    isLoading,
-    error,
-    refetch: fetchStats,
-  };
+  return { stats, isLoading, error, refetch: fetchStats, filterOptions };
 };
