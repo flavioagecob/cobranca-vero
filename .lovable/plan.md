@@ -1,72 +1,64 @@
 
 
-## Dashboard Analitico - Filtros, Remocao de Acoes Rapidas e Ranking de Cidades
+## Graficos de Evolucao Temporal no Dashboard
 
 ### Resumo
-Transformar o Dashboard em uma visao analitica com filtros por Safra e Parcela que atualizam todos os cards dinamicamente, remover a secao de Acoes Rapidas, e adicionar um ranking de cidades por inadimplencia/adimplencia.
+Adicionar dois graficos ao dashboard que mostram a evolucao mensal de inadimplencia e pagamentos, usando os dados de `operator_contracts` ja carregados pelo hook. Os graficos usarao a biblioteca Recharts (ja instalada) e os componentes de chart do shadcn/ui ja existentes.
 
 ---
 
-### 1. Adicionar Filtros de Safra e Parcela ao Dashboard
+### Dados
 
-**Hook `useDashboardStats`**:
-- Receber parametros opcionais `safra` e `parcela`
-- Buscar as opcoes de filtro do banco usando a funcao `get_invoice_filter_options()` ja existente
-- Aplicar os filtros na query de `operator_contracts` (filtrar por `mes_safra_cadastro` e `numero_fatura`)
-- Recalcular todas as metricas (pendentes, pagas, vencidas, contratos) apenas com os dados filtrados
-- Retornar tambem as listas de opcoes de safra e parcela
+Agrupar os contratos ja carregados no hook por mes de vencimento (`data_vencimento`):
+- Para cada mes (ex: "2025-01", "2025-02"...): contar faturas vencidas nao pagas (inadimplentes), faturas pagas, e somar os valores respectivos
+- Ordenar cronologicamente
+- Respeitar os filtros de Safra e Parcela ja aplicados
 
-**Componente `DashboardFilters`** (novo):
-- Dois selects: Safra e Parcela, seguindo o mesmo padrao visual ja usado em `InvoiceFilters`
-- Botao "Limpar" quando algum filtro estiver ativo
-- Posicionado logo abaixo do titulo do Dashboard
+### Novo tipo de dados no hook
 
-**Dashboard.tsx**:
-- Gerenciar estado dos filtros (`safra`, `parcela`)
-- Passar filtros para o hook `useDashboardStats`
-- Todos os cards (principais, vencimentos, contratos por status) reagirem aos filtros
+```text
+MonthlyTrendItem {
+  month: string        // "Jan/25", "Fev/25"...
+  overdueCount: number
+  overdueValue: number
+  paidCount: number
+  paidValue: number
+  pendingCount: number
+  pendingValue: number
+}
+```
 
----
-
-### 2. Remover Acoes Rapidas
-
-- Remover toda a secao "Acoes Rapidas" (links para Importar, Clientes, Relatorios) do Dashboard
-- Remover tambem o card de "Atividade Recente" (placeholder vazio)
-- Manter o card "Contratos por Status" que ja tem valor analitico
+O array `monthlyTrend` sera adicionado ao `DashboardStats` e calculado dentro do loop existente em `fetchStats`, sem queries adicionais ao banco.
 
 ---
 
-### 3. Ranking de Cidades por Inadimplencia/Adimplencia
+### Componente novo: `MonthlyTrendChart`
 
-**Dados**: Fazer JOIN entre `operator_contracts` e `customers` para agrupar por cidade:
-- Contar faturas vencidas nao pagas (inadimplentes) por cidade
-- Contar faturas pagas (adimplentes) por cidade
-- Calcular valor total em atraso por cidade
-- Respeitar os filtros de Safra/Parcela aplicados
+- Card com titulo "Evolucao Mensal"
+- Tabs para alternar entre "Quantidade" e "Valor (R$)"
+- Grafico de barras empilhadas (BarChart do Recharts) mostrando por mes:
+  - Vermelho: faturas vencidas (inadimplentes)
+  - Amarelo: faturas pendentes (ainda nao vencidas)
+  - Verde: faturas pagas
+- Tooltip com detalhes ao passar o mouse
+- Responsivo usando `ResponsiveContainer`
 
-**Componente `CityRanking`** (novo):
-- Card com duas abas (Tabs): "Mais Inadimplencia" e "Mais Adimplencia"
-- Lista das top 10 cidades em cada aba
-- Cada linha mostra: nome da cidade, quantidade de faturas, valor total, e uma barra de progresso proporcional
-- Cores: vermelho para inadimplencia, verde para adimplencia
+### Layout do Dashboard atualizado
 
-**Layout final do Dashboard (de cima para baixo)**:
-1. Titulo + Filtros (Safra, Parcela)
-2. Cards principais (4 colunas: Clientes, Pendentes, Pagas, Contratos Habilitados)
-3. Cards de vencimento (3 colunas: Vencidos, Hoje, Proximos 7 dias)
-4. Secao inferior (2 colunas): Ranking de Cidades | Contratos por Status
+1. Titulo + Filtros
+2. Cards principais (4 colunas)
+3. Cards de vencimento (3 colunas)
+4. **Grafico de Evolucao Mensal (largura total)**
+5. Ranking de Cidades | Contratos por Status
 
 ---
 
-### Detalhes Tecnicos
+### Arquivos modificados
 
-**Arquivos modificados**:
-- `src/hooks/useDashboardStats.ts` - adicionar filtros, buscar opcoes, incluir dados de cidades
-- `src/pages/Dashboard.tsx` - estado de filtros, novo layout sem acoes rapidas
-- `src/components/dashboard/DashboardFilters.tsx` (novo) - componente de filtros
-- `src/components/dashboard/CityRanking.tsx` (novo) - componente de ranking de cidades
+- **`src/hooks/useDashboardStats.ts`** -- adicionar interface `MonthlyTrendItem`, agregar dados por mes dentro do loop existente, incluir `monthlyTrend` no retorno
+- **`src/components/dashboard/MonthlyTrendChart.tsx`** (novo) -- componente com BarChart empilhado, tabs Quantidade/Valor, usando `ChartContainer` e `ChartTooltipContent` do shadcn/ui
+- **`src/pages/Dashboard.tsx`** -- importar e posicionar o `MonthlyTrendChart` entre os cards de vencimento e o ranking de cidades
 
-**Query de cidades**: O hook fara um JOIN client-side entre os contratos ja carregados e uma query separada de `customers(id, cidade)` para montar o ranking. Os filtros de Safra/Parcela serao aplicados antes da agregacao por cidade.
-
-**Dependencias**: Nenhuma nova -- usa apenas componentes UI ja existentes (Select, Card, Tabs, Progress do shadcn/ui).
+### Dependencias
+Nenhuma nova. Usa Recharts (ja instalado) e componentes de chart do shadcn/ui (`src/components/ui/chart.tsx`).
 
