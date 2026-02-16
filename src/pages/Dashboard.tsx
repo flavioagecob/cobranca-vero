@@ -43,7 +43,9 @@ export default function Dashboard() {
             {isLoading ? <Skeleton className="h-8 w-20" /> : (
               <>
                 <div className="text-2xl font-bold">{stats.totalCustomers}</div>
-                <p className="text-xs text-muted-foreground">clientes cadastrados</p>
+                <p className="text-xs text-muted-foreground">
+                  {(safra !== 'all' || parcela !== 'all') ? 'clientes no filtro' : 'clientes cadastrados'}
+                </p>
               </>
             )}
           </CardContent>
