@@ -8,6 +8,7 @@ import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { formatCurrency } from '@/lib/formatters';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
 import { CityRanking } from '@/components/dashboard/CityRanking';
+import { MonthlyTrendChart } from '@/components/dashboard/MonthlyTrendChart';
 
 export default function Dashboard() {
   const [safra, setSafra] = useState('all');
@@ -141,6 +142,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Monthly Trend Chart */}
+      <MonthlyTrendChart data={stats.monthlyTrend} isLoading={isLoading} />
 
       {/* Bottom Section: City Ranking + Contracts by Status */}
       <div className="grid gap-4 md:grid-cols-2">
