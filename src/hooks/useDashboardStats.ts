@@ -110,6 +110,12 @@ export const useDashboardStats = (safra?: string, parcela?: string): UseDashboar
       const { data: contractsData, error: contractsError } = await contractsQuery;
       if (contractsError) throw contractsError;
 
+      // Calculate unique customers from filtered contracts when filters are active
+      const hasActiveFilter = (safra && safra !== 'all') || (parcela && parcela !== 'all');
+      const uniqueCustomerIds = new Set(
+        (contractsData || []).map(c => c.customer_id).filter(Boolean)
+      );
+
       // Fetch customers with cities for ranking
       const { data: customersData } = await supabase
         .from('customers')
@@ -222,7 +228,7 @@ export const useDashboardStats = (safra?: string, parcela?: string): UseDashboar
         });
 
       setStats({
-        totalCustomers: customersCount || 0,
+        totalCustomers: hasActiveFilter ? uniqueCustomerIds.size : (customersCount || 0),
         pendingInvoicesValue: pendingValue,
         pendingInvoicesCount: pendingCount,
         paidInvoicesValue: paidValue,
