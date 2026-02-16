@@ -7,6 +7,16 @@ export interface CityRankingItem {
   value: number;
 }
 
+export interface MonthlyTrendItem {
+  month: string;
+  overdueCount: number;
+  overdueValue: number;
+  paidCount: number;
+  paidValue: number;
+  pendingCount: number;
+  pendingValue: number;
+}
+
 export interface DashboardStats {
   totalCustomers: number;
   pendingInvoicesValue: number;
@@ -23,6 +33,7 @@ export interface DashboardStats {
   next7DaysValue: number;
   cityRankingInadimplencia: CityRankingItem[];
   cityRankingAdimplencia: CityRankingItem[];
+  monthlyTrend: MonthlyTrendItem[];
 }
 
 interface FilterOptions {
@@ -54,6 +65,7 @@ const initialStats: DashboardStats = {
   next7DaysValue: 0,
   cityRankingInadimplencia: [],
   cityRankingAdimplencia: [],
+  monthlyTrend: [],
 };
 
 export const useDashboardStats = (safra?: string, parcela?: string): UseDashboardStatsReturn => {
@@ -120,6 +132,7 @@ export const useDashboardStats = (safra?: string, parcela?: string): UseDashboar
       const uniqueContractsByStatus: Record<string, Set<string>> = {};
       const inadimplenciaByCity: Record<string, { count: number; value: number }> = {};
       const adimplenciaByCity: Record<string, { count: number; value: number }> = {};
+      const monthlyMap: Record<string, { overdueCount: number; overdueValue: number; paidCount: number; paidValue: number; pendingCount: number; pendingValue: number }> = {};
 
       (contractsData || []).forEach((contract) => {
         const status = (contract.status_contrato || 'sem_status').toLowerCase().trim();
@@ -131,9 +144,21 @@ export const useDashboardStats = (safra?: string, parcela?: string): UseDashboar
         const valor = contract.valor_fatura || 0;
         const cidade = contract.customer_id ? customerCityMap[contract.customer_id] : null;
 
+        // Monthly trend aggregation
+        if (contract.data_vencimento) {
+          const monthKey = contract.data_vencimento.substring(0, 7); // "YYYY-MM"
+          if (!monthlyMap[monthKey]) {
+            monthlyMap[monthKey] = { overdueCount: 0, overdueValue: 0, paidCount: 0, paidValue: 0, pendingCount: 0, pendingValue: 0 };
+          }
+        }
+
         if (isPaid) {
           paidCount++;
           paidValue += valor;
+          if (contract.data_vencimento) {
+            const mk = contract.data_vencimento.substring(0, 7);
+            if (monthlyMap[mk]) { monthlyMap[mk].paidCount++; monthlyMap[mk].paidValue += valor; }
+          }
           if (cidade) {
             if (!adimplenciaByCity[cidade]) adimplenciaByCity[cidade] = { count: 0, value: 0 };
             adimplenciaByCity[cidade].count++;
@@ -147,10 +172,12 @@ export const useDashboardStats = (safra?: string, parcela?: string): UseDashboar
             const [year, month, day] = contract.data_vencimento.split('-').map(Number);
             const dueDate = new Date(year, month - 1, day);
             dueDate.setHours(0, 0, 0, 0);
+            const mk = contract.data_vencimento.substring(0, 7);
 
             if (dueDate < today) {
               overdueCount++;
               overdueValue += valor;
+              if (monthlyMap[mk]) { monthlyMap[mk].overdueCount++; monthlyMap[mk].overdueValue += valor; }
               if (cidade) {
                 if (!inadimplenciaByCity[cidade]) inadimplenciaByCity[cidade] = { count: 0, value: 0 };
                 inadimplenciaByCity[cidade].count++;
@@ -159,9 +186,13 @@ export const useDashboardStats = (safra?: string, parcela?: string): UseDashboar
             } else if (dueDate.getTime() === today.getTime()) {
               todayDueCount++;
               todayDueValue += valor;
+              if (monthlyMap[mk]) { monthlyMap[mk].pendingCount++; monthlyMap[mk].pendingValue += valor; }
             } else if (dueDate > today && dueDate <= next7Days) {
               next7DaysCount++;
               next7DaysValue += valor;
+              if (monthlyMap[mk]) { monthlyMap[mk].pendingCount++; monthlyMap[mk].pendingValue += valor; }
+            } else {
+              if (monthlyMap[mk]) { monthlyMap[mk].pendingCount++; monthlyMap[mk].pendingValue += valor; }
             }
           }
         }
@@ -182,6 +213,14 @@ export const useDashboardStats = (safra?: string, parcela?: string): UseDashboar
         .sort((a, b) => b.value - a.value)
         .slice(0, 10);
 
+      const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      const monthlyTrend: MonthlyTrendItem[] = Object.entries(monthlyMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, data]) => {
+          const [y, m] = key.split('-').map(Number);
+          return { month: `${monthNames[m - 1]}/${String(y).slice(2)}`, ...data };
+        });
+
       setStats({
         totalCustomers: customersCount || 0,
         pendingInvoicesValue: pendingValue,
@@ -198,6 +237,7 @@ export const useDashboardStats = (safra?: string, parcela?: string): UseDashboar
         next7DaysValue,
         cityRankingInadimplencia,
         cityRankingAdimplencia,
+        monthlyTrend,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar estatísticas');
