@@ -1,30 +1,34 @@
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
-  Users, 
-  FileText, 
-  TrendingUp, 
-  Upload,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  CalendarClock,
-  CalendarDays
+  Users, FileText, Clock, CheckCircle2, AlertTriangle, CalendarClock, CalendarDays
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { formatCurrency } from '@/lib/formatters';
+import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
+import { CityRanking } from '@/components/dashboard/CityRanking';
 
 export default function Dashboard() {
-  const { stats, isLoading } = useDashboardStats();
+  const [safra, setSafra] = useState('all');
+  const [parcela, setParcela] = useState('all');
+  const { stats, isLoading, filterOptions } = useDashboardStats(safra, parcela);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Visão geral do sistema de cobrança
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">Visão geral do sistema de cobrança</p>
+        </div>
+        <DashboardFilters
+          safra={safra}
+          parcela={parcela}
+          onSafraChange={setSafra}
+          onParcelaChange={setParcela}
+          safraOptions={filterOptions.safraOptions}
+          parcelaOptions={filterOptions.parcelaOptions}
+        />
       </div>
 
       {/* Stats Grid - Main Cards */}
@@ -35,14 +39,10 @@ export default function Dashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
+            {isLoading ? <Skeleton className="h-8 w-20" /> : (
               <>
                 <div className="text-2xl font-bold">{stats.totalCustomers}</div>
-                <p className="text-xs text-muted-foreground">
-                  clientes cadastrados
-                </p>
+                <p className="text-xs text-muted-foreground">clientes cadastrados</p>
               </>
             )}
           </CardContent>
@@ -54,16 +54,10 @@ export default function Dashboard() {
             <Clock className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-28" />
-            ) : (
+            {isLoading ? <Skeleton className="h-8 w-28" /> : (
               <>
-                <div className="text-2xl font-bold text-amber-600">
-                  {formatCurrency(stats.pendingInvoicesValue)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {stats.pendingInvoicesCount} faturas aguardando
-                </p>
+                <div className="text-2xl font-bold text-amber-600">{formatCurrency(stats.pendingInvoicesValue)}</div>
+                <p className="text-xs text-muted-foreground">{stats.pendingInvoicesCount} faturas aguardando</p>
               </>
             )}
           </CardContent>
@@ -75,16 +69,10 @@ export default function Dashboard() {
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-28" />
-            ) : (
+            {isLoading ? <Skeleton className="h-8 w-28" /> : (
               <>
-                <div className="text-2xl font-bold text-emerald-600">
-                  {formatCurrency(stats.paidInvoicesValue)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {stats.paidInvoicesCount} faturas quitadas
-                </p>
+                <div className="text-2xl font-bold text-emerald-600">{formatCurrency(stats.paidInvoicesValue)}</div>
+                <p className="text-xs text-muted-foreground">{stats.paidInvoicesCount} faturas quitadas</p>
               </>
             )}
           </CardContent>
@@ -96,14 +84,10 @@ export default function Dashboard() {
             <FileText className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
+            {isLoading ? <Skeleton className="h-8 w-16" /> : (
               <>
                 <div className="text-2xl font-bold text-blue-600">{stats.enabledContracts}</div>
-                <p className="text-xs text-muted-foreground">
-                  contratos ativos
-                </p>
+                <p className="text-xs text-muted-foreground">contratos ativos</p>
               </>
             )}
           </CardContent>
@@ -118,14 +102,10 @@ export default function Dashboard() {
             <AlertTriangle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-10 w-16" />
-            ) : (
+            {isLoading ? <Skeleton className="h-10 w-16" /> : (
               <>
                 <div className="text-3xl font-bold text-destructive">{stats.overdueCount}</div>
-                <p className="text-xs text-muted-foreground">
-                  {formatCurrency(stats.overdueValue)} em atraso
-                </p>
+                <p className="text-xs text-muted-foreground">{formatCurrency(stats.overdueValue)} em atraso</p>
               </>
             )}
           </CardContent>
@@ -137,14 +117,10 @@ export default function Dashboard() {
             <CalendarClock className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-10 w-16" />
-            ) : (
+            {isLoading ? <Skeleton className="h-10 w-16" /> : (
               <>
                 <div className="text-3xl font-bold text-amber-600">{stats.todayDueCount}</div>
-                <p className="text-xs text-muted-foreground">
-                  {formatCurrency(stats.todayDueValue)} a vencer
-                </p>
+                <p className="text-xs text-muted-foreground">{formatCurrency(stats.todayDueValue)} a vencer</p>
               </>
             )}
           </CardContent>
@@ -156,81 +132,23 @@ export default function Dashboard() {
             <CalendarDays className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-10 w-16" />
-            ) : (
+            {isLoading ? <Skeleton className="h-10 w-16" /> : (
               <>
                 <div className="text-3xl font-bold text-blue-600">{stats.next7DaysCount}</div>
-                <p className="text-xs text-muted-foreground">
-                  {formatCurrency(stats.next7DaysValue)} a vencer
-                </p>
+                <p className="text-xs text-muted-foreground">{formatCurrency(stats.next7DaysValue)} a vencer</p>
               </>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-lg font-semibold mb-4">Ações Rápidas</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Link to="/import">
-            <Card className="cursor-pointer hover:border-primary/50 transition-colors h-full">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Upload className="h-5 w-5" />
-                  Importar Planilhas
-                </CardTitle>
-                <CardDescription>
-                  Importe as planilhas de Base de Vendas e Base Operadora
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-
-          <Link to="/customers">
-            <Card className="cursor-pointer hover:border-primary/50 transition-colors h-full">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Users className="h-5 w-5" />
-                  Gerenciar Clientes
-                </CardTitle>
-                <CardDescription>
-                  Visualize e gerencie a lista de clientes ({stats.totalCustomers} cadastrados)
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-
-          <Link to="/reports">
-            <Card className="cursor-pointer hover:border-primary/50 transition-colors h-full">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <TrendingUp className="h-5 w-5" />
-                  Relatórios
-                </CardTitle>
-                <CardDescription>
-                  Acesse relatórios e métricas de cobrança
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-        </div>
-      </div>
-
-      {/* Recent Activity placeholder */}
+      {/* Bottom Section: City Ranking + Contracts by Status */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Atividade Recente</CardTitle>
-            <CardDescription>Últimas ações no sistema</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground text-center py-8">
-              Nenhuma atividade recente
-            </p>
-          </CardContent>
-        </Card>
+        <CityRanking
+          inadimplencia={stats.cityRankingInadimplencia}
+          adimplencia={stats.cityRankingAdimplencia}
+          isLoading={isLoading}
+        />
 
         <Card>
           <CardHeader>
